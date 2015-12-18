@@ -1,4 +1,4 @@
 [gerrit]
 host=review.openswitch.net
 port=29418
-project=openswitch/ops-switchd-container-plugin
+project=openswitch/ops-switchd-p4switch-plugin
