@@ -211,6 +211,7 @@ get_interface_pause_config(const char *pause_cfg, bool *pause_rx, bool *pause_tx
 static int
 netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
 {
+#if 0
     char cmd[80];
     struct netdev_sim *netdev = netdev_sim_cast(netdev_);
     const bool hw_enable = smap_get_bool(args, INTERFACE_HW_INTF_CONFIG_MAP_ENABLE, false);
@@ -258,6 +259,7 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
     netdev_change_seq_changed(netdev_);
 
     ovs_mutex_unlock(&netdev->mutex);
+#endif
 
     return 0;
 }

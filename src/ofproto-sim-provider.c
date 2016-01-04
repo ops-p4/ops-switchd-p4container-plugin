@@ -39,6 +39,10 @@ VLOG_DEFINE_THIS_MODULE(ofproto_provider_sim);
 #define MAX_CMD_LEN             2048
 #define SWNS_EXEC               "/sbin/ip netns exec swns"
 
+#if 1 // XXX find where it comes from
+#define VLAN_BITMAP_SIZE    4096
+#endif
+
 static struct sim_provider_ofport *
 sim_provider_ofport_cast(const struct ofport *ofport)
 {
@@ -311,6 +315,7 @@ bfd_status_changed(struct ofport *ofport_ OVS_UNUSED)
 static struct ofbundle *
 bundle_lookup(const struct sim_provider_node *ofproto, void *aux)
 {
+#if 0
     struct ofbundle *bundle;
 
     HMAP_FOR_EACH_IN_BUCKET(bundle, hmap_node, hash_pointer(aux, 0),
@@ -319,12 +324,14 @@ bundle_lookup(const struct sim_provider_node *ofproto, void *aux)
             return bundle;
         }
     }
+#endif
     return NULL;
 }
 
 static void
 enable_port_in_iptables(const char *port_name)
 {
+#if 0
     char cmd[MAX_CMD_LEN];
 
     snprintf(cmd, MAX_CMD_LEN, "%s iptables -D INPUT -i %s -j DROP",
@@ -340,11 +347,13 @@ enable_port_in_iptables(const char *port_name)
         VLOG_ERR("Failed to delete DROP rule. cmd=%s rc=%s", cmd,
                  strerror(errno));
     }
+#endif
 }
 
 static void
 disable_port_in_iptables(const char *port_name)
 {
+#if 0
     int rc = 0;
     char cmd[MAX_CMD_LEN];
 
@@ -368,11 +377,13 @@ disable_port_in_iptables(const char *port_name)
                      strerror(errno));
         }
     }
+#endif
 }
 
 static void
 bundle_del_port(struct sim_provider_ofport *port)
 {
+#if 0
     struct ofbundle *bundle = port->bundle;
 
     list_remove(&port->bundle_node);
@@ -384,11 +395,13 @@ bundle_del_port(struct sim_provider_ofport *port)
         enable_port_in_iptables(netdev_get_name(port->up.netdev));
         port->iptable_rules_added = false;
     }
+#endif
 }
 
 static bool
 bundle_add_port(struct ofbundle *bundle, ofp_port_t ofp_port)
 {
+#if 0
     struct sim_provider_ofport *port;
 
     port = get_ofp_port(bundle->ofproto, ofp_port);
@@ -404,6 +417,7 @@ bundle_add_port(struct ofbundle *bundle, ofp_port_t ofp_port)
         port->bundle = bundle;
         list_push_back(&bundle->ports, &port->bundle_node);
     }
+#endif
 
     return true;
 }
@@ -412,6 +426,7 @@ static void
 sim_bridge_vlan_routing_update(struct sim_provider_node *ofproto, int vlan,
                                bool add)
 {
+#if 0
     int i = 0, n = 0;
     int vlan_count = 0;
     char cmd_str[MAX_CMD_LEN];
@@ -463,12 +478,14 @@ sim_bridge_vlan_routing_update(struct sim_provider_node *ofproto, int vlan,
         VLOG_ERR("Failed to modify bridge interface trunks: cmd=%s, rc=%s",
                  cmd_str, strerror(errno));
     }
+#endif
 }
 
 /* Freeing up bundle and its members on heap */
 static void
 bundle_destroy(struct ofbundle *bundle)
 {
+#if 0
     struct sim_provider_node *ofproto = NULL;
     struct sim_provider_ofport *port = NULL, *next_port = NULL;
     const char *type = NULL;
@@ -513,11 +530,13 @@ bundle_destroy(struct ofbundle *bundle)
     }
 
     free(bundle);
+#endif
 }
 
 static void
 bundle_configure(struct ofbundle *bundle)
 {
+#if 0
     struct sim_provider_node *ofproto = bundle->ofproto;
     struct sim_provider_ofport *port = NULL, *next_port = NULL;
     char cmd_str[MAX_CMD_LEN];
@@ -651,6 +670,7 @@ done:
             port->iptable_rules_added = true;
         }
     }
+#endif
 }
 
 /* Bundles. */
@@ -658,6 +678,7 @@ static int
 bundle_set(struct ofproto *ofproto_, void *aux,
            const struct ofproto_bundle_settings *s)
 {
+#if 0
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
     const struct ofport *ofport = NULL;
     bool ok = false;
@@ -816,6 +837,7 @@ found:     ;
     /* Configure the bundle */
     bundle_configure(bundle);
 
+#endif
     return 0;
 }
 
@@ -828,6 +850,7 @@ bundle_get(struct ofproto *ofproto_, void *aux, int *bundle_handle)
 static int
 bundle_set_reconfigure(struct ofproto *ofproto_, int vid)
 {
+#if 0
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
     struct ofbundle *bundle;
 
@@ -845,12 +868,14 @@ bundle_set_reconfigure(struct ofproto *ofproto_, int vid)
          * and deleting the bundle when corresponding VLAN gets deleted */
         bundle_configure(bundle);
     }
+#endif
     return 0;
 }
 
 static void
 bundle_remove(struct ofport *port_)
 {
+#if 0
     struct sim_provider_ofport *port = sim_provider_ofport_cast(port_);
     struct ofbundle *bundle = port->bundle;
 
@@ -865,11 +890,13 @@ bundle_remove(struct ofport *port_)
             bundle_configure(bundle);
         }
     }
+#endif
 }
 
 static int
 set_vlan(struct ofproto *ofproto_, int vid, bool add)
 {
+#if 0
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
 
     /* MAKE TO DBG */
@@ -897,7 +924,7 @@ set_vlan(struct ofproto *ofproto_, int vid, bool add)
     if (ofproto->vrf == false) {
         bundle_set_reconfigure(ofproto_, vid);
     }
-
+#endif
     return 0;
 }
 

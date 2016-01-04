@@ -20,6 +20,9 @@
 #include "ofproto/ofproto-provider.h"
 #include "netdev-sim.h"
 #include "ofproto-sim-provider.h"
+#if 1
+#include "p4-switch.h"
+#endif
 
 #define init libovs_sim_plugin_LTX_init
 #define run libovs_sim_plugin_LTX_run
@@ -35,40 +38,8 @@ VLOG_DEFINE_THIS_MODULE(sim_plugin);
 void
 init(void)
 {
-    char cmd_str[MAX_CMD_LEN];
-    memset(cmd_str, 0, sizeof(cmd_str));
-    /* Cleaning up the Internal "ASIC" OVS everytime ops-switchd daemon is
-    * started or restarted or killed to keep the "ASIC" OVS database in sync
-    * with the OpenSwitch OVS database.
-    * Here, we initially stop the "ASIC" ovs-vswitchd-sim and ovsdb-server
-    * daemons, then delete the "ASIC" database file and start the
-    * ovsdb-server again which recreates the "ASIC" database file and finally
-    * start the ovs-vswitchd-sim daemon before ops-switchd daemon gets
-    * restarted.*/
-    if (system("systemctl stop openvswitch-sim") != 0) {
-        VLOG_ERR("Failed to stop Internal 'ASIC' OVS openvswitch.service");
-    }
-
-    if (system("systemctl stop ovsdb-server-sim") != 0) {
-        VLOG_ERR("Failed to stop Internal 'ASIC' OVS ovsdb-server-sim.service");
-    }
-
-    if (access(ASIC_OVSDB_PATH, F_OK) != -1) {
-        snprintf(cmd_str, MAX_CMD_LEN, "sudo rm -rf %s", ASIC_OVSDB_PATH);
-        if (system(cmd_str) != 0) {
-            VLOG_ERR("Failed to delete Internal 'ASIC' OVS ovsdb.db file");
-        }
-    } else {
-        VLOG_DBG("Internal 'ASIC' OVS ovsdb.db file does not exist");
-    }
-
-    if (system("systemctl start ovsdb-server-sim") != 0) {
-        VLOG_ERR("Failed to start Internal 'ASIC' OVS ovsdb-server-sim.service");
-    }
-
-    if (system("systemctl start openvswitch-sim") != 0) {
-        VLOG_ERR("Failed to start Internal 'ASIC' OVS openvswitch.service");
-    }
+    // XXX perform anything specific to ovs pluggin here
+    p4_switch_init();
 }
 
 void
