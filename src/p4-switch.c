@@ -17,6 +17,7 @@
 #include "p4-switch.h"
 #include "switchapi/switch_base_types.h"
 
+extern void start_switch_api_packet_driver(void);
 void
 p4_switch_init()
 {
