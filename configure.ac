@@ -1,9 +1,6 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AM_EXTRA_RECURSIVE_TARGETS([switch])
-AM_EXTRA_RECURSIVE_TARGETS([switch-install])
-
 AC_PREREQ([2.69])
 AC_INIT([ovs_p4_plugin], [0.1], [])
 AM_PATH_PYTHON([2.7],,[:])
@@ -40,8 +37,6 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_LANG_PUSH(C)
 AC_LANG_PUSH(C++)
 
-AC_CHECK_HEADERS([assert.h stdio.h string.h sys/stat.h sys/types.h unistd.h], \
-[], [AC_MSG_ERROR([Missing header file])])
 
 AC_CHECK_HEADER([thrift/Thrift.h], [], \
   [AC_MSG_ERROR([Thrift headers not found])])
@@ -60,12 +55,6 @@ AC_CHECK_FUNCS([memset])
 AC_CHECK_FUNCS([select])
 AC_CHECK_FUNCS([socket])
 AC_CHECK_HEADER_STDBOOL
-AC_CHECK_HEADERS([arpa/inet.h])
-AC_CHECK_HEADERS([fcntl.h])
-AC_CHECK_HEADERS([stddef.h])
-AC_CHECK_HEADERS([sys/ioctl.h])
-AC_CHECK_HEADERS([sys/socket.h])
-AC_CHECK_TYPES([ptrdiff_t])
 AC_C_INLINE
 AC_FUNC_MALLOC
 AC_PROG_RANLIB
@@ -79,13 +68,6 @@ AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
 
-AC_SUBST([AM_CXXFLAGS], ["$TOFINO_FLAGS"])
-AC_SUBST([AM_CPPFLAGS], ["-I$(if test x$prefix != xNONE; then \
-                                echo $prefix; \
-                              else \
-                                echo $ac_default_prefix; \
-                              fi \
-                             )/include"])
 p4target=unknown
 
 AC_ARG_ENABLE([bmv2], \
