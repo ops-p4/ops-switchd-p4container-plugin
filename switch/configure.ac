@@ -71,13 +71,6 @@ AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
 
-AC_SUBST([AM_CXXFLAGS], ["$TOFINO_FLAGS"])
-AC_SUBST([AM_CPPFLAGS], ["-I$(if test x$prefix != xNONE; then \
-                                echo $prefix; \
-                              else \
-                                echo $ac_default_prefix; \
-                              fi \
-                             )/include"])
 p4target=unknown
 
 AC_ARG_ENABLE([bmv2], \
