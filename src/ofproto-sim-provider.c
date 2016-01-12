@@ -136,6 +136,9 @@ construct(struct ofproto *ofproto_)
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
     struct shash_node *node, *next;
     int error = 0;
+
+    VLOG_INFO("P4:Ofproto->construct");
+#if 0
     char cmd_str[MAX_CMD_LEN];
 
     /* If the ofproto is of type BRIDGE, then create a bridge with the same
@@ -180,6 +183,7 @@ construct(struct ofproto *ofproto_)
     } else {
         ofproto->vrf = true;
     }
+#endif
 
     ofproto->netflow = NULL;
     ofproto->stp = NULL;

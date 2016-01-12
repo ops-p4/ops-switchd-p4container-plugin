@@ -15,17 +15,17 @@ src/ofproto-sim-provider.c \
 src/p4-switch.c \
 src/sim-plugins.c
 
-noinst_LTLIBRARIES = lib_ovs_p4_sim_plugin_interface.la
-lib_ovs_p4_sim_plugin_interface_la_SOURCES = $(p4_plugin_files)
-lib_ovs_p4_sim_plugin_interface_la_CFLAGS = -I $(srcdir)/include
-lib_ovs_p4_sim_plugin_interface_la_CFLAGS += -I ${OVSCOMMON_INCLUDE_DIRS}
-lib_ovs_p4_sim_plugin_interface_la_CFLAGS += -I $(srcdir)/switch/switchapi/inc
-lib_ovs_p4_sim_plugin_interface_la_CFLAGS += -I $(srcdir)/switch/switchapi/third-party/tommyds/include
-lib_ovs_p4_sim_plugin_interface_la_CFLAGS += -I $(srcdir)/switch/p4src/includes
-lib_ovs_p4_sim_plugin_interface_la_CFLAGS += -I $(srcdir)/switch/p4src/bmv2_p4_pd
-lib_ovs_p4_sim_plugin_interface_la_CFLAGS += -I $(PFX)/$(includedir)/pdfixed
+noinst_LTLIBRARIES = libovs_p4_sim_plugin_interface.la
+libovs_p4_sim_plugin_interface_la_SOURCES = $(p4_plugin_files)
+libovs_p4_sim_plugin_interface_la_CFLAGS = -I $(srcdir)/include
+libovs_p4_sim_plugin_interface_la_CFLAGS += -I ${OVSCOMMON_INCLUDE_DIRS}
+libovs_p4_sim_plugin_interface_la_CFLAGS += -I $(srcdir)/switch/switchapi/inc
+libovs_p4_sim_plugin_interface_la_CFLAGS += -I $(srcdir)/switch/switchapi/third-party/tommyds/include
+libovs_p4_sim_plugin_interface_la_CFLAGS += -I $(srcdir)/switch/p4src/includes
+libovs_p4_sim_plugin_interface_la_CFLAGS += -I $(srcdir)/switch/p4src/bmv2_p4_pd
+libovs_p4_sim_plugin_interface_la_CFLAGS += -I $(PFX)/$(includedir)/pdfixed
 
-lib_ovs_p4_sim_plugin_interface_la_CFLAGS += -std=gnu99 -D BMV2
+libovs_p4_sim_plugin_interface_la_CFLAGS += -std=gnu99 -D BMV2
 
 SWITCHAPI_DIR = $(srcdir)/switch/switchapi
 SWITCHAPI_LIB := $(SWITCHAPI_DIR)/libswitchapi.la
@@ -43,15 +43,25 @@ $(BUILT_SOURCES) : $(SWITCHP4_PD_LIB)
 
 # need to find a way to link all libs together into a single .so
 # catch (for not using LIBADD) is the dependency
-lib_LTLIBRARIES = lib_ovs_p4_sim_plugin.la
+lib_LTLIBRARIES = libovs_p4_sim_plugin.la
 
 BMV2PD_EXTRA_LIBS := $(PFX)/$(libdir)/libpdfixed.la
 BMV2PD_EXTRA_LIBS += $(PFX)/$(libdir)/libpdfixedthrift.la
 BMV2PD_EXTRA_LIBS += $(PFX)/$(libdir)/libbmthrift.la
 BMV2PD_EXTRA_LIBS += $(PFX)/$(libdir)/libsswitch.la
+BMV2PD_EXTRA_LIBS += $(PFX)/$(libdir)/libthrift.la
 
-lib_ovs_p4_sim_plugin_la_SOURCES =
-lib_ovs_p4_sim_plugin_la_LIBADD = $(noinst_LTLIBRARIES) $(SWITCHAPI_LIB) $(SWITCHP4_PD_LIB) $(BMV2PD_EXTRA_LIBS) $(OVSCOMMON_LIB)
+libovs_p4_sim_plugin_la_SOURCES =
+libovs_p4_sim_plugin_la_LIBADD = $(noinst_LTLIBRARIES) $(SWITCHAPI_LIB) $(SWITCHP4_PD_LIB) $(BMV2PD_EXTRA_LIBS) $(OVSCOMMON_LIB)
+
+noinst_PROGRAMS = p4test
+p4test_LDADD = $(SWITCHAPI_LIB) $(SWITCHP4_PD_LIB) $(BMV2PD_EXTRA_LIBS)
+p4test_SOURCES = main.c $(BUILT_SOURCES)
+p4test_CFLAGS = -D SWITCHAPI_ENABLE -g \
+	-I switch/p4src/bmv2_p4_pd \
+	-I $(PFX)$(includedir)/pdfixed \
+	-I $(PFX)$(includedir)/pdfixed/pd \
+	-I $(PFX)$(includedir)/pdfixed/src
 
 CLEANFILES = $(lib_LTLIBRARIES) $(BUILT_SOURCES)
 .PHONY: $(SWITCHP4_PD_LIB)

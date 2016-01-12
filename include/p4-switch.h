@@ -17,6 +17,10 @@
 #ifndef _P4_SWITCH_H_
 #define _P4_SWITCH_H_
 
+#include "switchapi/switch_base_types.h"
+#include "switchapi/switch_handle.h"
+#include "switchapi/switch_hostif.h"
+
 void p4_switch_init(void);
 
 #endif /* _P4_SWITCH_H_ */

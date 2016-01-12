@@ -87,6 +87,9 @@ typedef struct switch_mac_addr {
 /* init */
 switch_status_t switch_api_init(switch_device_t device, unsigned int num_ports);
 
+/* host packet interface */
+int start_switch_api_packet_driver(void);
+
 /** IP address type v4 or v6 */
 typedef enum {
    SWITCH_API_IP_ADDR_V4,                 /**< IPv4 address type */

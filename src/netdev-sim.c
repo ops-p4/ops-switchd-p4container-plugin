@@ -33,6 +33,8 @@
 #include "openvswitch/vlog.h"
 #include "netdev-sim.h"
 
+#include "p4-switch.h"
+
 #define SWNS_EXEC       "/sbin/ip netns exec swns"
 
 VLOG_DEFINE_THIS_MODULE(netdev_sim);
@@ -66,6 +68,11 @@ struct netdev_sim {
     bool autoneg;
     bool pause_tx;
     bool pause_rx;
+
+    /* p4 target related information */
+    uint32_t port_num;
+    switch_handle_t hostif_handle;
+    switch_handle_t port_handle;
 };
 
 static int netdev_sim_construct(struct netdev *);
@@ -93,23 +100,32 @@ netdev_sim_alloc(void)
 static int
 netdev_sim_construct(struct netdev *netdev_)
 {
-    static atomic_count next_n = ATOMIC_COUNT_INIT(0xaa550000);
+    static atomic_count next_n = ATOMIC_COUNT_INIT(0x0000);
     struct netdev_sim *netdev = netdev_sim_cast(netdev_);
     unsigned int n;
+    // BaeFoo8 = Barefoot
+    unsigned int mac = 0xbaef0080;
 
     n = atomic_count_inc(&next_n);
 
+    VLOG_INFO("P4:sim construct for port %d", n);
+
     ovs_mutex_init(&netdev->mutex);
     ovs_mutex_lock(&netdev->mutex);
-    netdev->hwaddr[0] = 0xaa;
-    netdev->hwaddr[1] = 0x55;
-    netdev->hwaddr[2] = n >> 24;
-    netdev->hwaddr[3] = n >> 16;
-    netdev->hwaddr[4] = n >> 8;
-    netdev->hwaddr[5] = n;
+    netdev->hwaddr[0] = 0x00;
+    netdev->hwaddr[1] = mac >> 24;
+    netdev->hwaddr[2] = mac >> 16;
+    netdev->hwaddr[3] = mac >> 8;
+    netdev->hwaddr[4] = mac;
+    netdev->hwaddr[5] = n;    // 0-255 ports
     netdev->mtu = 1500;
     netdev->flags = 0;
     netdev->link_state = 0;
+    netdev->hostif_handle = SWITCH_API_INVALID_HANDLE;
+    // create and store port handle for sequential port#
+    // XXX 0 based or 1 based ??
+    netdev->port_num = n;
+    netdev->port_handle = id_to_handle(SWITCH_HANDLE_TYPE_PORT, n);
 
     ovs_mutex_unlock(&netdev->mutex);
 
@@ -157,6 +173,15 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
 
     strncpy(netdev->linux_intf_name, netdev->up.name, sizeof(netdev->linux_intf_name));
 
+    VLOG_INFO("P4:set_hw_intf for interface, %s", netdev->linux_intf_name);
+
+    /* create a tap interface */
+    sprintf(cmd, "%s /sbin/ip tuntap add dev %s",
+            SWNS_EXEC, netdev->linux_intf_name);
+    if (system(cmd) != 0) {
+        VLOG_ERR("NETDEV-SIM | system command failure cmd=%s", cmd);
+    }
+
     /* In simulator it is assumed that interfaces always
      * link up at max_speed listed in hardware info. */
     if(max_speed)
@@ -182,9 +207,11 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
 
     sprintf(cmd, "%s /sbin/ip link set dev %s up",
             SWNS_EXEC, netdev->linux_intf_name);
+#if 0
     if (system(cmd) != 0) {
         VLOG_ERR("NETDEV-SIM | system command failure cmd=%s", cmd);
     }
+#endif
 
     ovs_mutex_unlock(&netdev->mutex);
 
@@ -211,7 +238,7 @@ get_interface_pause_config(const char *pause_cfg, bool *pause_rx, bool *pause_tx
 static int
 netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
 {
-#if 0
+#if 1
     char cmd[80];
     struct netdev_sim *netdev = netdev_sim_cast(netdev_);
     const bool hw_enable = smap_get_bool(args, INTERFACE_HW_INTF_CONFIG_MAP_ENABLE, false);
@@ -219,15 +246,15 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
     const char *pause = smap_get(args, INTERFACE_HW_INTF_CONFIG_MAP_PAUSE);
     const int mtu = smap_get_int(args, INTERFACE_HW_INTF_CONFIG_MAP_MTU, 0);
 
-    VLOG_DBG("Setting up physical interfaces, %s", netdev->linux_intf_name);
-
     ovs_mutex_lock(&netdev->mutex);
 
-    VLOG_DBG("Interface=%s hw_enable=%d ", netdev->linux_intf_name, hw_enable);
+    VLOG_INFO("P4:Interface=%s hw_enable=%d ", netdev->linux_intf_name, hw_enable);
 
     memset(cmd, 0, sizeof(cmd));
 
     if (hw_enable) {
+        switch_hostif_t     hostif;
+
         netdev->flags |= NETDEV_UP;
         netdev->link_state = 1;
 
@@ -240,6 +267,11 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
 
         sprintf(cmd, "%s /sbin/ip link set dev %s up",
                 SWNS_EXEC, netdev->linux_intf_name);
+
+        memset(&hostif, 0, sizeof(hostif));
+        hostif.handle = netdev->port_handle;
+        strncpy(hostif.intf_name, netdev->linux_intf_name, sizeof(hostif.intf_name));
+        netdev->hostif_handle = switch_api_hostif_create(0, &hostif);
     } else {
         netdev->flags &= ~NETDEV_UP;
         netdev->link_state = 0;
@@ -251,6 +283,8 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
 
         sprintf(cmd, "%s /sbin/ip link set dev %s down",
                 SWNS_EXEC, netdev->linux_intf_name);
+        switch_api_hostif_delete(0, netdev->hostif_handle);
+        netdev->hostif_handle = SWITCH_API_INVALID_HANDLE;
     }
     if (system(cmd) != 0) {
         VLOG_ERR("system command failure: cmd=%s",cmd);

@@ -24,12 +24,12 @@
 #include "p4-switch.h"
 #endif
 
-#define init libovs_sim_plugin_LTX_init
-#define run libovs_sim_plugin_LTX_run
-#define wait libovs_sim_plugin_LTX_wait
-#define destroy libovs_sim_plugin_LTX_destroy
-#define netdev_register libovs_sim_plugin_LTX_netdev_register
-#define ofproto_register libovs_sim_plugin_LTX_ofproto_register
+#define init libovs_p4_sim_plugin_LTX_init
+#define run libovs_p4_sim_plugin_LTX_run
+#define wait libovs_p4_sim_plugin_LTX_wait
+#define destroy libovs_p4_sim_plugin_LTX_destroy
+#define netdev_register libovs_p4_sim_plugin_LTX_netdev_register
+#define ofproto_register libovs_p4_sim_plugin_LTX_ofproto_register
 
 #define MAX_CMD_LEN             50
 
