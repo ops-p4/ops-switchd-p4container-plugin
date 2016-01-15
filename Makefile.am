@@ -54,14 +54,14 @@ BMV2PD_EXTRA_LIBS += $(PFX)/$(libdir)/libthrift.la
 libovs_p4_sim_plugin_la_SOURCES =
 libovs_p4_sim_plugin_la_LIBADD = $(noinst_LTLIBRARIES) $(SWITCHAPI_LIB) $(SWITCHP4_PD_LIB) $(BMV2PD_EXTRA_LIBS) $(OVSCOMMON_LIB)
 
-noinst_PROGRAMS = p4test
-p4test_LDADD = $(SWITCHAPI_LIB) $(SWITCHP4_PD_LIB) $(BMV2PD_EXTRA_LIBS)
-p4test_SOURCES = main.c $(BUILT_SOURCES)
-p4test_CFLAGS = -D SWITCHAPI_ENABLE -g \
-	-I switch/p4src/bmv2_p4_pd \
-	-I $(PFX)$(includedir)/pdfixed \
-	-I $(PFX)$(includedir)/pdfixed/pd \
-	-I $(PFX)$(includedir)/pdfixed/src
+#noinst_PROGRAMS = p4test
+#p4test_LDADD = $(SWITCHAPI_LIB) $(SWITCHP4_PD_LIB) $(BMV2PD_EXTRA_LIBS)
+#p4test_SOURCES = main.c $(BUILT_SOURCES)
+#p4test_CFLAGS = -D SWITCHAPI_ENABLE -g \
+#	-I switch/p4src/bmv2_p4_pd \
+#	-I $(PFX)$(includedir)/pdfixed \
+#	-I $(PFX)$(includedir)/pdfixed/pd \
+#	-I $(PFX)$(includedir)/pdfixed/src
 
 CLEANFILES = $(lib_LTLIBRARIES) $(BUILT_SOURCES)
 .PHONY: $(SWITCHP4_PD_LIB)

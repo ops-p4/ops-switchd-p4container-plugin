@@ -34,7 +34,7 @@
 #include "ofproto-sim-provider.h"
 #include "vswitch-idl.h"
 
-VLOG_DEFINE_THIS_MODULE(ofproto_provider_sim);
+VLOG_DEFINE_THIS_MODULE(P4_ofproto_provider_sim);
 
 #define MAX_CMD_LEN             2048
 #define SWNS_EXEC               "/sbin/ip netns exec swns"
@@ -85,6 +85,9 @@ enumerate_names(const char *type, struct sset *names)
     struct sim_provider_node *ofproto;
     const char *port_type;
 
+    // XXX documentation says caller has already cleared the names..
+    // should not do it here ?
+    // update name for types supported ("system" and "vrf")
     sset_clear(names);
     HMAP_FOR_EACH(ofproto, all_sim_provider_node, &all_sim_provider_nodes) {
         if (strcmp(type, ofproto->up.type)) {
@@ -106,6 +109,8 @@ del(const char *type OVS_UNUSED, const char *name OVS_UNUSED)
 static const char *
 port_open_type(const char *datapath_type OVS_UNUSED, const char *port_type)
 {
+    // XXX: comments indicate that for userspace DP (such as bmv2) type could be
+    // reported as "tap"
     if (port_type && (strcmp(port_type, OVSREC_INTERFACE_TYPE_INTERNAL) == 0)) {
         return port_type;
     }
@@ -137,7 +142,8 @@ construct(struct ofproto *ofproto_)
     struct shash_node *node, *next;
     int error = 0;
 
-    VLOG_INFO("P4:Ofproto->construct");
+    VLOG_INFO("P4:Ofproto->construct - name %s type %s",
+                ofproto->up.name, ofproto->up.type);
 #if 0
     char cmd_str[MAX_CMD_LEN];
 
@@ -289,6 +295,8 @@ port_construct(struct ofport *port_)
 {
     struct sim_provider_ofport *port = sim_provider_ofport_cast(port_);
 
+    // XXX clean-up the provider_ofport structure - add the info as needed
+    VLOG_INFO("port_construct");
     return 0;
 }
 
@@ -301,6 +309,7 @@ port_destruct(struct ofport *port_ OVS_UNUSED)
 static void
 port_reconfigured(struct ofport *port_, enum ofputil_port_config old_config)
 {
+    // XXX old_config is a bitmap (set of flags like down, no_rx....
     return;
 }
 
@@ -684,6 +693,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
 {
 #if 0
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
+    struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
     const struct ofport *ofport = NULL;
     bool ok = false;
     int ofp_port, i = 0, n = 0;
@@ -996,6 +1006,8 @@ port_add(struct ofproto *ofproto_, struct netdev *netdev)
     const char *devname = netdev_get_name(netdev);
 
     sset_add(&ofproto->ports, devname);
+    // XXX switch_api_interface_create()
+    // store the handle
     return 0;
 }
 
@@ -1005,6 +1017,8 @@ port_del(struct ofproto *ofproto_, ofp_port_t ofp_port)
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
     struct sim_provider_ofport *ofport = get_ofp_port(ofproto, ofp_port);
     int error = 0;
+    // XXX switch_api_interface_delete()
+    // store the handle
 
     return error;
 }
@@ -1286,6 +1300,10 @@ set_config(struct ofproto *ofproto_,
     }
 }
 #endif
+
+// XXX
+// set_stp() - can be used to install the STP reasoncode to send STP BPDUs to CPU
+//
 
 const struct ofproto_class ofproto_sim_provider_class = {
     init,

@@ -37,7 +37,7 @@
 
 #define SWNS_EXEC       "/sbin/ip netns exec swns"
 
-VLOG_DEFINE_THIS_MODULE(netdev_sim);
+VLOG_DEFINE_THIS_MODULE(P4_netdev_sim);
 
 /* Protects 'sim_list'. */
 static struct ovs_mutex sim_list_mutex = OVS_MUTEX_INITIALIZER;
@@ -162,11 +162,27 @@ netdev_sim_run(void)
 }
 
 static int
+netdev_sim_internal_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
+{
+    struct netdev_sim *netdev = netdev_sim_cast(netdev_);
+
+    ovs_mutex_lock(&netdev->mutex);
+    strncpy(netdev->linux_intf_name, netdev->up.name, sizeof(netdev->linux_intf_name));
+    /* TODO - internal interfaces such as bridge_normal is needed for L3 routing across VLANs */
+    VLOG_INFO("TBD - set_internal_hw_intf_info for %s", netdev->linux_intf_name);
+    ovs_mutex_unlock(&netdev->mutex);
+    return 0;
+}
+static int
 netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
 {
     struct netdev_sim *netdev = netdev_sim_cast(netdev_);
     const char *max_speed = smap_get(args, INTERFACE_HW_INTF_INFO_MAP_MAX_SPEED);
     const char *mac_addr = smap_get(args, INTERFACE_HW_INTF_INFO_MAP_MAC_ADDR);
+    const char *hw_id = smap_get(args, INTERFACE_HW_INTF_INFO_MAP_SWITCH_INTF_ID);
+    const char *is_splittable = smap_get(args, INTERFACE_HW_INTF_INFO_MAP_SPLIT_4);
+    const char *split_parent = smap_get(args, INTERFACE_HW_INTF_INFO_SPLIT_PARENT);
+
     char cmd[1024];
 
     ovs_mutex_lock(&netdev->mutex);
@@ -175,9 +191,25 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
 
     VLOG_INFO("P4:set_hw_intf for interface, %s", netdev->linux_intf_name);
 
+    if (hw_id) {
+        netdev->port_num = atoi(hw_id);
+        // switchapi uses 0 based port#
+        netdev->port_handle = id_to_handle(SWITCH_HANDLE_TYPE_PORT, netdev->port_num-1);
+    } else {
+        VLOG_ERR("No hw_id available");
+    }
+
+    if ((is_splittable && !strncmp(is_splittable, "true", 4)) ||
+        (mac_addr == NULL) || split_parent) {
+        VLOG_ERR("Split interface or NULL MAC is not supported - split: %s", is_splittable ? is_splittable : "NotSpecified");
+        return -EINVAL;
+    }
+    VLOG_INFO("P4:set_hw_intf create tap interface for port, %d", netdev->port_num);
+
     /* create a tap interface */
-    sprintf(cmd, "%s /sbin/ip tuntap add dev %s",
+    sprintf(cmd, "%s /sbin/ip tuntap add dev %s mode tap",
             SWNS_EXEC, netdev->linux_intf_name);
+
     if (system(cmd) != 0) {
         VLOG_ERR("NETDEV-SIM | system command failure cmd=%s", cmd);
     }
@@ -187,17 +219,18 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
     if(max_speed)
         netdev->hw_info_link_speed = atoi(max_speed);
 
+    sprintf(cmd, "%s /sbin/ip link set dev %s down",
+            SWNS_EXEC, netdev->linux_intf_name);
+    if (system(cmd) != 0) {
+        VLOG_ERR("NETDEV-SIM | system command failure cmd=%s", cmd);
+    }
+
     if(mac_addr != NULL) {
         strncpy(netdev->hw_addr_str, mac_addr, sizeof(netdev->hw_addr_str));
     } else {
         VLOG_ERR("Invalid mac address %s", mac_addr);
     }
 
-    sprintf(cmd, "%s /sbin/ip link set dev %s down",
-            SWNS_EXEC, netdev->linux_intf_name);
-    if (system(cmd) != 0) {
-        VLOG_ERR("NETDEV-SIM | system command failure cmd=%s", cmd);
-    }
 
     sprintf(cmd, "%s /sbin/ip link set %s address %s",
             SWNS_EXEC, netdev->up.name, netdev->hw_addr_str);
@@ -207,11 +240,9 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
 
     sprintf(cmd, "%s /sbin/ip link set dev %s up",
             SWNS_EXEC, netdev->linux_intf_name);
-#if 0
     if (system(cmd) != 0) {
         VLOG_ERR("NETDEV-SIM | system command failure cmd=%s", cmd);
     }
-#endif
 
     ovs_mutex_unlock(&netdev->mutex);
 
@@ -235,6 +266,18 @@ get_interface_pause_config(const char *pause_cfg, bool *pause_rx, bool *pause_tx
     }
 }
 
+static int
+netdev_sim_internal_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
+{
+    struct netdev_sim *netdev = netdev_sim_cast(netdev_);
+
+    ovs_mutex_lock(&netdev->mutex);
+    strncpy(netdev->linux_intf_name, netdev->up.name, sizeof(netdev->linux_intf_name));
+    /* TODO - internal interfaces such as bridge_normal is needed for L3 routing across VLANs */
+    VLOG_INFO("TBD - set_internal_hw_intf_config for %s", netdev->linux_intf_name);
+    ovs_mutex_unlock(&netdev->mutex);
+    return 0;
+}
 static int
 netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
 {
@@ -504,8 +547,8 @@ static const struct netdev_class sim_internal_class = {
     netdev_sim_dealloc,
     NULL,                       /* get_config */
     NULL,                       /* set_config */
-    netdev_sim_set_hw_intf_info,
-    netdev_sim_set_hw_intf_config,
+    netdev_sim_internal_set_hw_intf_info,
+    netdev_sim_internal_set_hw_intf_config,
     NULL,                       /* get_tunnel_config */
     NULL,                       /* build header */
     NULL,                       /* push header */
