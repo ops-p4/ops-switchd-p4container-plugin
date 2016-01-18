@@ -21,6 +21,8 @@
 #include "switchapi/switch_handle.h"
 #include "switchapi/switch_hostif.h"
 
+#define MAX_P4_SWITCH_PORTS 64
+
 void p4_switch_init(void);
 
 #endif /* _P4_SWITCH_H_ */

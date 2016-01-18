@@ -108,7 +108,7 @@ netdev_sim_construct(struct netdev *netdev_)
 
     n = atomic_count_inc(&next_n);
 
-    VLOG_INFO("P4:sim construct for port %d", n);
+    VLOG_INFO("P4:sim construct for port %s", netdev->up.name);
 
     ovs_mutex_init(&netdev->mutex);
     ovs_mutex_lock(&netdev->mutex);
@@ -122,11 +122,6 @@ netdev_sim_construct(struct netdev *netdev_)
     netdev->flags = 0;
     netdev->link_state = 0;
     netdev->hostif_handle = SWITCH_API_INVALID_HANDLE;
-    // create and store port handle for sequential port#
-    // XXX 0 based or 1 based ??
-    netdev->port_num = n;
-    netdev->port_handle = id_to_handle(SWITCH_HANDLE_TYPE_PORT, n);
-
     ovs_mutex_unlock(&netdev->mutex);
 
     ovs_mutex_lock(&sim_list_mutex);
@@ -201,8 +196,9 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
 
     if ((is_splittable && !strncmp(is_splittable, "true", 4)) ||
         (mac_addr == NULL) || split_parent) {
-        VLOG_ERR("Split interface or NULL MAC is not supported - split: %s", is_splittable ? is_splittable : "NotSpecified");
-        return -EINVAL;
+        VLOG_ERR("Split interface or NULL MAC is not supported - parent i/f: %s",
+                    split_parent ? split_parent : "NotSpecified");
+        return EINVAL;
     }
     VLOG_INFO("P4:set_hw_intf create tap interface for port, %d", netdev->port_num);
 

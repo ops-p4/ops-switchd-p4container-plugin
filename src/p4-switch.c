@@ -53,9 +53,8 @@ p4_switch_init()
     p4_pd_init();
     p4_pd_dc_init();
     p4_pd_dc_assign_device(0, "ipc:///tmp/bmv2-0-notifications.ipc", 10001);
-    /* init switchapi for device 0 and 256 ports - XXX redice ports to 64 for ops */
     /* Initialize cpu interface between model and the plugin - this is done internally by api_init */
-    switch_api_init(0, 256);
+    switch_api_init(0, MAX_P4_SWITCH_PORTS);
     start_switch_api_packet_driver();
     /* attach to swns for the rest of the processing */
     if (swns_fd >= 0) {

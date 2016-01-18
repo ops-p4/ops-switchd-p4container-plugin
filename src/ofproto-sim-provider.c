@@ -34,6 +34,8 @@
 #include "ofproto-sim-provider.h"
 #include "vswitch-idl.h"
 
+#include "p4-switch.h"
+
 VLOG_DEFINE_THIS_MODULE(P4_ofproto_provider_sim);
 
 #define MAX_CMD_LEN             2048
@@ -222,6 +224,10 @@ construct(struct ofproto *ofproto_)
     ofproto_init_tables(ofproto_, N_TABLES);
     ofproto->up.tables[TBL_INTERNAL].flags = OFTABLE_HIDDEN | OFTABLE_READONLY;
 
+#if 1
+    ofproto_init_max_ports(ofproto, MAX_P4_SWITCH_PORTS);
+#endif
+
     return error;
 }
 
@@ -309,7 +315,7 @@ port_destruct(struct ofport *port_ OVS_UNUSED)
 static void
 port_reconfigured(struct ofport *port_, enum ofputil_port_config old_config)
 {
-    // XXX old_config is a bitmap (set of flags like down, no_rx....
+    // XXX old_config is a bitmap (set of flags like down, no_rx....)
     return;
 }
 
@@ -691,8 +697,10 @@ static int
 bundle_set(struct ofproto *ofproto_, void *aux,
            const struct ofproto_bundle_settings *s)
 {
-#if 0
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
+    VLOG_INFO("bundle_set: name %s, n_slaves %d, vlan_mode %d, vlan %d",
+                s->name, s->n_slaves, s->vlan_mode, s->vlan);
+#if 0
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
     const struct ofport *ofport = NULL;
     bool ok = false;
@@ -910,6 +918,7 @@ bundle_remove(struct ofport *port_)
 static int
 set_vlan(struct ofproto *ofproto_, int vid, bool add)
 {
+    VLOG_INFO("set_vlan: vid %d, add %d", vid, add);
 #if 0
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
 
@@ -1005,9 +1014,12 @@ port_add(struct ofproto *ofproto_, struct netdev *netdev)
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
     const char *devname = netdev_get_name(netdev);
 
+    VLOG_INFO("port_add: %s", devname);
+
     sset_add(&ofproto->ports, devname);
     // XXX switch_api_interface_create()
     // store the handle
+
     return 0;
 }
 
