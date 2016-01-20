@@ -19,6 +19,7 @@
 #define NETDEV_SIM_H 1
 
 #include "netdev-provider.h"
+#include "p4-switch.h"
 
 #define STR_EQ(s1, s2)      ((s1 != NULL) && (s2 != NULL) && \
                              (strlen((s1)) == strlen((s2))) && \
@@ -26,6 +27,7 @@
 
 /* SIM provider API. */
 void netdev_sim_register(void);
-extern int netdev_sim_get_hw_id(struct netdev *netdev);
+extern int netdev_get_device_port_handle(struct netdev *netdev_,
+                int32_t *device, switch_handle_t *port_handle);
 
 #endif /* netdev-sim.h */

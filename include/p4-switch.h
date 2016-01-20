@@ -20,6 +20,8 @@
 #include "switchapi/switch_base_types.h"
 #include "switchapi/switch_handle.h"
 #include "switchapi/switch_hostif.h"
+#include "switchapi/switch_interface.h"
+#include "switchapi/switch_vlan.h"
 
 #define MAX_P4_SWITCH_PORTS 64
 

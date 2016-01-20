@@ -21,6 +21,7 @@
 #define OFPROTO_SIM_PROVIDER_H 1
 
 #include "ofproto/ofproto-provider.h"
+#include "p4-switch.h"
 
 #define MAX_CLI                 1024
 #define OVS_VSCTL               "/opt/openvswitch/bin/ovs-vsctl"
@@ -37,6 +38,12 @@ struct sim_provider_group {
     struct ovs_mutex stats_mutex;
     uint64_t packet_count OVS_GUARDED;  /* Number of packets received. */
     uint64_t byte_count OVS_GUARDED;    /* Number of bytes received. */
+};
+
+struct ofp4vlan {
+    struct hmap_node hmap_node;
+    uint32_t vid;
+    switch_handle_t vlan_handle;
 };
 
 struct ofbundle {
@@ -67,6 +74,12 @@ struct ofbundle {
     bool is_vlan_routing_enabled;       /* If VLAN routing is enabled on this
                                          * bundle. */
     bool is_bridge_bundle;      /* If the bundle is internal for the bridge. */
+
+    bool is_lag;                /* lag or just single port */
+    /* p4 information */
+    switch_handle_t port_lag_handle; /* p4 api handle for port or lag
+                                      * (or port when only 1 member) */
+    switch_handle_t if_handle;  /* p4 api interface handle */
 };
 
 struct sim_provider_ofport {
@@ -124,6 +137,7 @@ struct sim_provider_node {
     /* Bridging. */
     struct netflow *netflow;
     struct hmap bundles;        /* Contains "struct ofbundle"s. */
+    struct hmap vlans;          /* Contains "struct ofp4vlan"s. */
     struct mac_learning *ml;
     struct mcast_snooping *ms;
     bool has_bonded_bundles;

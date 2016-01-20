@@ -30,10 +30,10 @@
 
 #include <openswitch-idl.h>
 
+#include "p4-switch.h"
 #include "openvswitch/vlog.h"
 #include "netdev-sim.h"
 
-#include "p4-switch.h"
 
 #define SWNS_EXEC       "/sbin/ip netns exec swns"
 
@@ -122,6 +122,7 @@ netdev_sim_construct(struct netdev *netdev_)
     netdev->flags = 0;
     netdev->link_state = 0;
     netdev->hostif_handle = SWITCH_API_INVALID_HANDLE;
+    netdev->port_handle = SWITCH_API_INVALID_HANDLE;
     ovs_mutex_unlock(&netdev->mutex);
 
     ovs_mutex_lock(&sim_list_mutex);
@@ -166,7 +167,7 @@ netdev_sim_internal_set_hw_intf_info(struct netdev *netdev_, const struct smap *
     /* TODO - internal interfaces such as bridge_normal is needed for L3 routing across VLANs */
     VLOG_INFO("TBD - set_internal_hw_intf_info for %s", netdev->linux_intf_name);
     ovs_mutex_unlock(&netdev->mutex);
-    return 0;
+    return EINVAL;
 }
 static int
 netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
@@ -186,28 +187,32 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
 
     VLOG_INFO("P4:set_hw_intf for interface, %s", netdev->linux_intf_name);
 
-    if (hw_id) {
-        netdev->port_num = atoi(hw_id);
-        // switchapi uses 0 based port#
-        netdev->port_handle = id_to_handle(SWITCH_HANDLE_TYPE_PORT, netdev->port_num-1);
-    } else {
-        VLOG_ERR("No hw_id available");
-    }
-
     if ((is_splittable && !strncmp(is_splittable, "true", 4)) ||
         (mac_addr == NULL) || split_parent) {
-        VLOG_ERR("Split interface or NULL MAC is not supported - parent i/f: %s",
+        VLOG_ERR("Split interface or NULL MAC is not supported- parent i/f %s",
                     split_parent ? split_parent : "NotSpecified");
+        ovs_mutex_unlock(&netdev->mutex);
         return EINVAL;
     }
-    VLOG_INFO("P4:set_hw_intf create tap interface for port, %d", netdev->port_num);
+    if (netdev->port_handle == SWITCH_API_INVALID_HANDLE) {
+        if (hw_id) {
+            netdev->port_num = atoi(hw_id);
+            // switchapi uses 0 based port#
+            netdev->port_handle = id_to_handle(SWITCH_HANDLE_TYPE_PORT,
+                                                        netdev->port_num-1);
+            VLOG_INFO("P4:set_hw_intf create tap interface for port, %d",
+                                                        netdev->port_num);
 
-    /* create a tap interface */
-    sprintf(cmd, "%s /sbin/ip tuntap add dev %s mode tap",
-            SWNS_EXEC, netdev->linux_intf_name);
+            /* create a tap interface */
+            sprintf(cmd, "%s /sbin/ip tuntap add dev %s mode tap",
+                    SWNS_EXEC, netdev->linux_intf_name);
 
-    if (system(cmd) != 0) {
-        VLOG_ERR("NETDEV-SIM | system command failure cmd=%s", cmd);
+            if (system(cmd) != 0) {
+                VLOG_ERR("NETDEV-SIM | system command failure cmd=%s", cmd);
+            }
+        } else {
+            VLOG_ERR("No hw_id available");
+        }
     }
 
     /* In simulator it is assumed that interfaces always
@@ -277,7 +282,6 @@ netdev_sim_internal_set_hw_intf_config(struct netdev *netdev_, const struct smap
 static int
 netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
 {
-#if 1
     char cmd[80];
     struct netdev_sim *netdev = netdev_sim_cast(netdev_);
     const bool hw_enable = smap_get_bool(args, INTERFACE_HW_INTF_CONFIG_MAP_ENABLE, false);
@@ -332,8 +336,6 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
     netdev_change_seq_changed(netdev_);
 
     ovs_mutex_unlock(&netdev->mutex);
-#endif
-
     return 0;
 }
 
@@ -460,6 +462,14 @@ netdev_sim_get_carrier(const struct netdev *netdev_, bool *carrier)
 
 
 /* Helper functions. */
+int netdev_get_device_port_handle(struct netdev *netdev_,
+                int32_t *device, switch_handle_t *port_handle)
+{
+    struct netdev_sim *netdev = netdev_sim_cast(netdev_);
+    *device = 0;
+    *port_handle = netdev->port_handle;
+    return 0;
+}
 
 static const struct netdev_class sim_class = {
     "system",
