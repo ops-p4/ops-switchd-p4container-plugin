@@ -5842,12 +5842,12 @@ switch_pd_acl_table_add_default_entry(switch_device_t device)
         g_sess_hdl,
         p4_pd_device,
         &entry_hdl);
-#endif
 
     status = p4_pd_dc_acl_stats_set_default_action_acl_stats_update(
         g_sess_hdl,
         p4_pd_device,
         &entry_hdl);
+#endif
 
     p4_pd_complete_operations(g_sess_hdl);
     return status;
