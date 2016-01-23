@@ -17,6 +17,7 @@ limitations under the License.
 #define FABRIC_ENABLE
 #define EGRESS_FILTER
 #define INT_TRANSIT_ENABLE
+#define STATS_DISABLE   // for BMV2
 
 // Defines for switchapi library
 #ifdef URPF_DISABLE

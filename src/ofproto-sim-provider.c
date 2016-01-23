@@ -804,12 +804,12 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     unsigned long *trunks = NULL;
     int ret_val = 0;
 
-    VLOG_INFO("bundle_set: name %s, n_slaves %d, vlan_mode %d, vlan %d",
-                s->name, s->n_slaves, s->vlan_mode, s->vlan);
     if (s == NULL) {
         bundle_destroy(bundle_lookup(ofproto, aux));
         return 0;
     }
+    VLOG_INFO("bundle_set: name %s, n_slaves %d, vlan_mode %d, vlan %d",
+                s->name, s->n_slaves, s->vlan_mode, s->vlan);
     bundle = bundle_lookup(ofproto, aux);
 
     if (!bundle) {

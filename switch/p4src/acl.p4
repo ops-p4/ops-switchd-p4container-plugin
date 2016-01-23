@@ -468,7 +468,9 @@ action drop_packet() {
 }
 
 action drop_packet_with_reason(drop_reason) {
+#ifndef STATS_DISABLE
     count(drop_stats, drop_reason);
+#endif
     drop();
 }
 
@@ -549,7 +551,9 @@ table drop_stats {
 control process_system_acl {
     apply(system_acl);
     if (ingress_metadata.drop_flag == TRUE) {
+#ifndef STATS_DISABLE
         apply(drop_stats);
+#endif
     }
 }
 

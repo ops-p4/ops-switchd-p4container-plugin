@@ -3844,17 +3844,21 @@ switch_pd_system_acl_table_add_entry(switch_device_t device,
             break;
         case SWITCH_ACL_ACTION_DROP:
             if (action_params->drop.reason_code) {
+#ifndef P4_STATS_DISABLE
                 p4_pd_dc_drop_packet_with_reason_action_spec_t action_spec;
                 memset(&action_spec, 0,
                        sizeof(p4_pd_dc_drop_packet_with_reason_action_spec_t));
                 action_spec.action_drop_reason =
                     action_params->drop.reason_code;
+#endif
                 status = p4_pd_dc_system_acl_table_add_with_drop_packet_with_reason(
                     g_sess_hdl,
                     p4_pd_device,
                     &match_spec,
                     priority,
+#ifndef P4_STATS_DISABLE
                     &action_spec,
+#endif
                     entry_hdl);
             } else {
                 status = p4_pd_dc_system_acl_table_add_with_drop_packet(

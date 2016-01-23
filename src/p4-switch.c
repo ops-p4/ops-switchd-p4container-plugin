@@ -54,7 +54,7 @@ p4_switch_init()
     p4_pd_dc_init();
     p4_pd_dc_assign_device(0, "ipc:///tmp/bmv2-0-notifications.ipc", 10001);
     /* Initialize cpu interface between model and the plugin - this is done internally by api_init */
-    switch_api_init(0, MAX_P4_SWITCH_PORTS);
+    switch_api_init(0, MAX_P4_SWITCH_PORTS+1);  /* add 1 port cpu port */
     start_switch_api_packet_driver();
     /* attach to swns for the rest of the processing */
     if (swns_fd >= 0) {
