@@ -5837,10 +5837,12 @@ switch_pd_acl_table_add_default_entry(switch_device_t device)
     }
 #endif
 
+#ifndef P4_STATS_DISABLE
     status = p4_pd_dc_drop_stats_set_default_action_drop_stats_update(
         g_sess_hdl,
         p4_pd_device,
         &entry_hdl);
+#endif
 
     status = p4_pd_dc_acl_stats_set_default_action_acl_stats_update(
         g_sess_hdl,
