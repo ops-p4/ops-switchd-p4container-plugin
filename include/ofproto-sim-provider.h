@@ -71,12 +71,14 @@ struct ofbundle {
     bool is_added_to_sim_ovs;   /* If this bundle is added to ASIC simulating
                                  * OVS. */
 
-    bool is_vlan_routing_enabled;       /* If VLAN routing is enabled on this
-                                         * bundle. */
+    bool is_vlan_routing_enabled;   /* If VLAN routing is enabled on this
+                                     * bundle. */
     bool is_bridge_bundle;      /* If the bundle is internal for the bridge. */
 
     bool is_lag;                /* lag or just single port */
     /* p4 information */
+    int32_t port_type;
+    int32_t tag_mode;
     switch_handle_t port_lag_handle; /* p4 api handle for port or lag
                                       * (or port when only 1 member) */
     switch_handle_t if_handle;  /* p4 api interface handle */

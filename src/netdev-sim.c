@@ -311,10 +311,13 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
         sprintf(cmd, "%s /sbin/ip link set dev %s up",
                 SWNS_EXEC, netdev->linux_intf_name);
 
-        memset(&hostif, 0, sizeof(hostif));
-        hostif.handle = netdev->port_handle;
-        strncpy(hostif.intf_name, netdev->linux_intf_name, sizeof(hostif.intf_name));
-        netdev->hostif_handle = switch_api_hostif_create(0, &hostif);
+        if (netdev->hostif_handle == SWITCH_API_INVALID_HANDLE) {
+            memset(&hostif, 0, sizeof(hostif));
+            hostif.handle = netdev->port_handle;
+            strncpy(hostif.intf_name, netdev->linux_intf_name, sizeof(hostif.intf_name));
+            netdev->hostif_handle = switch_api_hostif_create(0, &hostif);
+            VLOG_INFO("switch_api_hostif_create handle 0x%x", netdev->hostif_handle);
+        }
     } else {
         netdev->flags &= ~NETDEV_UP;
         netdev->link_state = 0;
@@ -329,9 +332,11 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
         switch_api_hostif_delete(0, netdev->hostif_handle);
         netdev->hostif_handle = SWITCH_API_INVALID_HANDLE;
     }
+#if 0 // No cpu traffic - debug model
     if (system(cmd) != 0) {
         VLOG_ERR("system command failure: cmd=%s",cmd);
     }
+#endif
 
     netdev_change_seq_changed(netdev_);
 
