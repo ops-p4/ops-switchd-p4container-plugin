@@ -48,7 +48,7 @@ lib_LTLIBRARIES = libovs_p4_sim_plugin.la
 BMV2PD_EXTRA_LIBS := $(PFX)/$(libdir)/libpdfixed.la
 BMV2PD_EXTRA_LIBS += $(PFX)/$(libdir)/libpdfixedthrift.la
 BMV2PD_EXTRA_LIBS += $(PFX)/$(libdir)/libbmthrift.la
-BMV2PD_EXTRA_LIBS += $(PFX)/$(libdir)/libsswitch.la
+BMV2PD_EXTRA_LIBS += $(PFX)/$(libdir)/libsimpleswitch_thrift.la
 BMV2PD_EXTRA_LIBS += $(PFX)/$(libdir)/libthrift.la
 
 libovs_p4_sim_plugin_la_SOURCES =

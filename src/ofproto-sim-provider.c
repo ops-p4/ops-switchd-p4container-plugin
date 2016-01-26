@@ -950,8 +950,8 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         bundle_destroy(bundle_lookup(ofproto, aux));
         return 0;
     }
-    VLOG_INFO("bundle_set: name %s, n_slaves %d, vlan_mode %d, vlan %d",
-                s->name, s->n_slaves, s->vlan_mode, s->vlan);
+    VLOG_INFO("bundle_set: name %s, n_slaves %d, vlan_mode %d, vlan %d, AUX = 0x%p",
+                s->name, s->n_slaves, s->vlan_mode, s->vlan, aux);
 #if 1
     // XXX LAG is not supported
     if (s->n_slaves > 1) {
@@ -961,6 +961,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
 #endif
     bundle = bundle_lookup(ofproto, aux);
     if (!bundle) {
+        VLOG_INFO("bundle_set: New bundle name %s, aux 0x%p", s->name, aux);
         bundle = xmalloc(sizeof (struct ofbundle));
 
         bundle->ofproto = ofproto;
