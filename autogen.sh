@@ -1,3 +1,3 @@
 #!/bin/sh
 
-exec autoreconf -fi
+exec autoreconf -fis

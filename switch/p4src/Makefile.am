@@ -51,7 +51,7 @@ bmv2_pd_files.ts : $(p4_bmv2_output)
 
 $(p4_bmv2_output) : $(p4_files)
 	@mkdir -p bmv2_p4_pd
-	$(P4CC_BM) --pd bmv2_p4_pd --p4-prefix dc --json $@ $(p4_prg)
+	PATH=$(PATH):$(PFX)$(bindir)/p4c_bm $(P4CC_BM) --pd bmv2_p4_pd --p4-prefix dc --json $@ $(p4_prg)
 
 pkgdata_DATA = $(p4_bmv2_output)
 

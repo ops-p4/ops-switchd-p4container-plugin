@@ -332,11 +332,9 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
         switch_api_hostif_delete(0, netdev->hostif_handle);
         netdev->hostif_handle = SWITCH_API_INVALID_HANDLE;
     }
-#if 0 // No cpu traffic - debug model
     if (system(cmd) != 0) {
         VLOG_ERR("system command failure: cmd=%s",cmd);
     }
-#endif
 
     netdev_change_seq_changed(netdev_);
 
