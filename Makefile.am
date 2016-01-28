@@ -63,5 +63,11 @@ libovs_p4_sim_plugin_la_LIBADD = $(noinst_LTLIBRARIES) $(SWITCHAPI_LIB) $(SWITCH
 #	-I $(PFX)$(includedir)/pdfixed/pd \
 #	-I $(PFX)$(includedir)/pdfixed/src
 
+# Remove libs that are not packaged, yocto complains otherwise
+install-exec-hook:
+	install -d $(DESTDIR)/$(libdir)/openvswitch/plugins
+	mv $(DESTDIR)/$(libdir)/libovs_p4_sim_plugin.so.0.0.0 $(DESTDIR)/$(libdir)/openvswitch/plugins/libovs_p4_sim_plugin.so
+	rm -f $(DESTDIR)/$(libdir)/libovs_p4_sim_plugin.so.*
+
 CLEANFILES = $(lib_LTLIBRARIES) $(BUILT_SOURCES)
 .PHONY: $(SWITCHP4_PD_LIB)
