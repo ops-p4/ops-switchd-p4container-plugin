@@ -38,7 +38,6 @@ VLOG_DEFINE_THIS_MODULE(sim_plugin);
 void
 init(void)
 {
-    // XXX perform anything specific to ovs pluggin here
     p4_switch_init();
 }
 

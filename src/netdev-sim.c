@@ -165,9 +165,6 @@ netdev_sim_internal_set_hw_intf_info(struct netdev *netdev_, const struct smap *
 
     ovs_mutex_lock(&netdev->mutex);
     strncpy(netdev->linux_intf_name, netdev->up.name, sizeof(netdev->linux_intf_name));
-    /* XXX - figure out if bridge_normal interface is of any use for p4 switch.
-     * Need to create other internal interfaces for SVIs, when it is supported
-     */
     VLOG_INFO("TBD - internal_set_hw_intf_info for %s", netdev->linux_intf_name);
     if(mac_addr != NULL) {
         strncpy(netdev->hw_addr_str, mac_addr, sizeof(netdev->hw_addr_str));

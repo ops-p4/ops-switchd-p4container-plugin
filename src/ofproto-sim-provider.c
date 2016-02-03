@@ -41,9 +41,8 @@ VLOG_DEFINE_THIS_MODULE(P4_ofproto_provider_sim);
 #define MAX_CMD_LEN             2048
 #define SWNS_EXEC               "/sbin/ip netns exec swns"
 
-#if 1 // XXX find where it comes from
-#define VLAN_BITMAP_SIZE    4096
-#endif
+#define VLAN_BITMAP_SIZE    4096 /* XXX find if this is defined somewhere */
+
 static void p4_switch_vlan_port_delete (struct ofbundle *bundle, int32_t vlan);
 static void p4_switch_interface_delete (struct ofbundle *bundle);
 
@@ -97,9 +96,10 @@ enumerate_names(const char *type, struct sset *names)
     struct sim_provider_node *ofproto;
     const char *port_type;
 
-    // XXX documentation says caller has already cleared the names..
-    // should not do it here ?
-    // update name for types supported ("system" and "vrf")
+    /* XXX documentation says caller has already cleared the names..
+     * should not do it here ?
+     * update name for types supported ("system" and "vrf")
+     */
     sset_clear(names);
     HMAP_FOR_EACH(ofproto, all_sim_provider_node, &all_sim_provider_nodes) {
         if (strcmp(type, ofproto->up.type)) {
@@ -121,8 +121,9 @@ del(const char *type OVS_UNUSED, const char *name OVS_UNUSED)
 static const char *
 port_open_type(const char *datapath_type OVS_UNUSED, const char *port_type)
 {
-    // XXX: comments indicate that for userspace DP (such as bmv2) type could be
-    // reported as "tap"
+    /* XXX: comments indicate that for userspace DP (such as bmv2) type could be
+     * reported as "tap"
+     */
     if (port_type && (strcmp(port_type, OVSREC_INTERFACE_TYPE_INTERNAL) == 0)) {
         return port_type;
     }
@@ -269,7 +270,7 @@ port_construct(struct ofport *port_)
 {
     struct sim_provider_ofport *port = sim_provider_ofport_cast(port_);
 
-    // XXX clean-up the provider_ofport structure - add the info as needed
+    /* XXX clean-up the provider_ofport structure - add the info as needed */
     VLOG_INFO("port_construct");
     return 0;
 }
@@ -283,7 +284,7 @@ port_destruct(struct ofport *port_ OVS_UNUSED)
 static void
 port_reconfigured(struct ofport *port_, enum ofputil_port_config old_config)
 {
-    // XXX old_config is a bitmap (set of flags like down, no_rx....)
+    /* XXX old_config is a bitmap (set of flags like down, no_rx....) */
     return;
 }
 
@@ -317,7 +318,7 @@ static struct ofp4vlan *
 p4vlan_lookup(const struct sim_provider_node *ofproto, uint32_t vid)
 {
     struct ofp4vlan *p4vlan;
-    // XXX: what is basis - initial value? use -1
+    /* XXX: what is basis - initial value? use -1 */
     HMAP_FOR_EACH_IN_BUCKET(p4vlan, hmap_node, hash_int(vid, 0),
                             &ofproto->vlans) {
         if (p4vlan->vid == vid) {
@@ -487,7 +488,6 @@ bundle_destroy(struct ofbundle *bundle)
     struct sim_provider_ofport *port = NULL, *next_port = NULL;
 
     VLOG_INFO("bundle_destroy %s", bundle->name);
-    /* XXX remove native vlan and all trunk vlans */
     if (ofproto->vrf || bundle->is_bridge_bundle) {
         return;
     }
@@ -507,52 +507,6 @@ bundle_destroy(struct ofbundle *bundle)
     }
 
     free(bundle);
-#if 0
-    struct sim_provider_node *ofproto = NULL;
-    struct sim_provider_ofport *port = NULL, *next_port = NULL;
-    const char *type = NULL;
-    char cmd_str[MAX_CMD_LEN];
-
-    if (!bundle) {
-        return;
-    }
-
-    ofproto = bundle->ofproto;
-
-    if (bundle->is_added_to_sim_ovs == true) {
-        snprintf(cmd_str, MAX_CMD_LEN, "%s del-port %s", OVS_VSCTL,
-                 bundle->name);
-        if (system(cmd_str) != 0) {
-            VLOG_ERR("Failed to delete the existing port. cmd=%s, rc=%s",
-                     cmd_str, strerror(errno));
-        }
-        bundle->is_added_to_sim_ovs = false;
-    }
-
-    /* If the ofproto is of type System/Bridge, and VLAN routing is enabled on
-     * this bundle then delete that VLAN ID from BRIDGE interface created in
-     * ASIC OVS. We should ignore the bundle whose name is same as the BRIDGE
-     * name. */
-    if (bundle->is_vlan_routing_enabled == true) {
-        sim_bridge_vlan_routing_update(ofproto, bundle->vlan, false);
-        bundle->is_vlan_routing_enabled = false;
-    }
-
-    LIST_FOR_EACH_SAFE(port, next_port, bundle_node, &bundle->ports) {
-        bundle_del_port(port);
-    }
-
-    hmap_remove(&ofproto->bundles, &bundle->hmap_node);
-
-    if (bundle->name) {
-        free(bundle->name);
-    }
-    if (bundle->trunks) {
-        free(bundle->trunks);
-    }
-
-    free(bundle);
-#endif
 }
 
 static void
@@ -560,16 +514,16 @@ vlan_mode_to_port_type(int32_t vlan_mode, int32_t *port_type, int32_t *tag_mode)
 {
     ovs_assert(port_type && tag_mode);
     *port_type = SWITCH_API_INTERFACE_L2_VLAN_TRUNK;
-    *tag_mode =  SWITCH_VLAN_PORT_UNTAGGED; // XXX support other types
+    *tag_mode =  SWITCH_VLAN_PORT_UNTAGGED; /* XXX support other types */
     if (vlan_mode == PORT_VLAN_ACCESS) {
         *port_type = SWITCH_API_INTERFACE_L2_VLAN_ACCESS;
         *tag_mode = SWITCH_VLAN_PORT_UNTAGGED;
     } else if (vlan_mode == PORT_VLAN_TRUNK) {
-        // XXX
+        /* XXX */
     } else if (vlan_mode == PORT_VLAN_NATIVE_TAGGED) {
-        // XXX
+        /* XXX */
     } else if (vlan_mode == PORT_VLAN_NATIVE_UNTAGGED) {
-        // XXX
+        /* XXX */
     } else {
         *port_type = SWITCH_API_INTERFACE_NONE;
     }
@@ -588,7 +542,7 @@ p4_switch_vlan_port_create (struct ofbundle *bundle, int32_t vlan)
         switch_vlan_port_t vlan_port;
 
         vlan_port.handle = bundle->if_handle;
-        vlan_port.tagging_mode = bundle->tag_mode; // XXX: does it matter for remove?
+        vlan_port.tagging_mode = bundle->tag_mode;
         VLOG_INFO("switch_api_vlan_ports_add - vlan 0x%x, port hdl 0x%x",
                     p4vlan->vlan_handle, vlan_port.handle);
         switch_api_vlan_ports_add(0, p4vlan->vlan_handle, 1, &vlan_port);
@@ -607,7 +561,7 @@ p4_switch_vlan_port_delete (struct ofbundle *bundle, int32_t vlan)
         switch_vlan_port_t vlan_port;
 
         vlan_port.handle = bundle->if_handle;
-        vlan_port.tagging_mode = bundle->tag_mode; // XXX: does it matter for remove?
+        vlan_port.tagging_mode = bundle->tag_mode;
         VLOG_INFO("switch_api_vlan_ports_remove - vlan 0x%x, port hdl 0x%x",
                     p4vlan->vlan_handle, vlan_port.handle);
         switch_api_vlan_ports_remove(0, p4vlan->vlan_handle, 1, &vlan_port);
@@ -622,14 +576,14 @@ p4_switch_interface_create (struct ofbundle *bundle)
     struct sim_provider_ofport *port = NULL;
     int32_t device = 0;
 
-    // XXX use if_handle valid function from switchapi if available
+    /* XXX use if_handle valid function from switchapi if available */
     ovs_assert(!P4_HANDLE_IS_VALID(bundle->if_handle));
     memset(&i_info, 0, sizeof(switch_api_interface_info_t));
 
     port = sim_provider_bundle_ofport_cast(list_front(&bundle->ports));
 
     if (bundle->is_lag) {
-        // XXX LAG not supported
+        /* XXX LAG not supported */
         return;
     }
     netdev_get_device_port_handle(port->up.netdev, &device,
@@ -652,11 +606,11 @@ static void
 p4_switch_interface_delete (struct ofbundle *bundle)
 {
     if (!P4_HANDLE_IS_VALID(bundle->if_handle)) {
-        // No interface is created in P4 so far
+        /* No interface is created in P4 so far */
         return;
     }
     if (bundle->vlan != -1) {
-        // delete native/default vlan
+        /* delete native/default vlan */
         p4_switch_vlan_port_delete(bundle, bundle->vlan);
         bundle->vlan = -1;
     }
@@ -667,7 +621,7 @@ p4_switch_interface_delete (struct ofbundle *bundle)
     if (bundle->port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
         int b;
         if (bundle->trunks) {
-            // Delete pv mappings for all trunk vlans
+            /* Delete pv mappings for all trunk vlans */
             for (b=0; b<VLAN_BITMAP_SIZE; b++) {
                 if (bitmap_is_set(bundle->trunks, b)) {
                     VLOG_INFO("delete trunk vlan %d", b);
@@ -684,236 +638,6 @@ p4_switch_interface_delete (struct ofbundle *bundle)
     bundle->if_handle = SWITCH_API_INVALID_HANDLE;
     return;
 }
-
-#if 0
-static int
-bundle_configure (struct ofbundle *bundle)
-{
-    struct sim_provider_node *ofproto = bundle->ofproto;
-    int32_t n_members;
-    struct sim_provider_ofport *port = NULL;
-    switch_api_interface_info_t i_info;
-    int device = 0;
-    struct ofp4vlan *p4vlan;
-    switch_vlan_port_t vlan_port;
-    switch_vlan_tagging_mode_t tagging_mode;
-    int ret_val = 0;
-    switch_handle_t vlan_handle = SWITCH_API_INVALID_HANDLE;
-
-    n_members = list_size(&bundle->ports);
-
-    if (n_members == 1) {
-        if (bundle->is_lag) {
-            // XXX: delete lag from p4
-        }
-        bundle->is_lag = false;
-        port = sim_provider_bundle_ofport_cast(list_front(&bundle->ports));
-        netdev_get_device_port_handle(port->up.netdev, &device,
-                                        &bundle->port_lag_handle);
-
-    } else {
-        // create switchapi lag port and add member ports to it
-        // ...
-    }
-    // common code to create switchapi_interface for port or lag
-    memset(&i_info, 0, sizeof(switch_api_interface_info_t));
-
-    i_info.type = SWITCH_API_INTERFACE_L2_VLAN_TRUNK;
-    tagging_mode = SWITCH_VLAN_PORT_UNTAGGED;
-
-#if 1
-    if (bundle->vlan_mode == PORT_VLAN_ACCESS) {
-        i_info.type = SWITCH_API_INTERFACE_L2_VLAN_ACCESS;
-        tagging_mode = SWITCH_VLAN_PORT_UNTAGGED;
-    } else if (bundle->vlan_mode == PORT_VLAN_TRUNK) {
-        // XXX
-    } else if (bundle->vlan_mode == PORT_VLAN_NATIVE_TAGGED) {
-        // XXX
-    } else if (bundle->vlan_mode == PORT_VLAN_NATIVE_UNTAGGED) {
-        // XXX
-    } else {
-        ovs_assert(0);
-    }
-#endif
-    i_info.u.port_lag_handle = bundle->port_lag_handle;
-    VLOG_INFO("switch_api_interface_create - type %d, tagging %d, handle %d",
-                i_info.type, tagging_mode, i_info.u.port_lag_handle);
-
-    bundle->if_handle = switch_api_interface_create(device, &i_info);
-    if (bundle->if_handle == SWITCH_API_INVALID_HANDLE) {
-        ret_val = EINVAL; // XXX where are correct error codes?
-        VLOG_ERR("switch_api_interface_create - failed");
-        goto err_ret;
-    }
-    VLOG_INFO("switch_api_interface_create - handle 0x%x", bundle->if_handle);
-    if (bundle->vlan > 0) {
-        // valid vlan - check if vlan is already created
-        p4vlan = p4vlan_lookup(ofproto, (uint32_t)bundle->vlan);
-        if (p4vlan) {
-            vlan_handle = p4vlan->vlan_handle;
-        } else {
-            // XXX should we assert if this is not allowed by ovs
-            vlan_handle = SWITCH_API_INVALID_HANDLE;
-            VLOG_ERR("vlan %d, not created", bundle->vlan);
-        }
-    }
-    if (vlan_handle != SWITCH_API_INVALID_HANDLE) {
-        vlan_port.handle = bundle->port_lag_handle;
-        vlan_port.tagging_mode = tagging_mode;
-        VLOG_INFO("switch_api_vlan_ports_add - vlan 0x%x, port hdl 0x%x",
-                    vlan_handle, vlan_port.handle);
-        ret_val = switch_api_vlan_ports_add(device, vlan_handle, 1, &vlan_port);
-        if (ret_val) {
-            VLOG_ERR("switch_api_vlan_ports_add - failed");
-            goto err_ret;
-        }
-    }
-    if (bundle->vlan_mode != PORT_VLAN_ACCESS) {
-        // XXX got thru' trunks bitmap and create all the vlan_ports
-    }
-
-#if 0
-    struct sim_provider_ofport *port = NULL, *next_port = NULL;
-    char cmd_str[MAX_CMD_LEN];
-    int i = 0, n = 0, n_ports = 0;
-    uint32_t vlan_count = 0;
-
-    // XXX handle internal interfaces
-    // If num_members == 1 create port handle
-    /* If this bundle is already added in the ASIC simulator OVS then delete
-     * it. We are going to re-create it with new config again. */
-    if (bundle->is_added_to_sim_ovs == true) {
-        snprintf(cmd_str, MAX_CMD_LEN, "%s del-port %s", OVS_VSCTL,
-                 bundle->name);
-        if (system(cmd_str) != 0) {
-            VLOG_ERR("Failed to delete the existing port. cmd=%s, rc=%s",
-                     cmd_str, strerror(errno));
-        }
-        bundle->is_added_to_sim_ovs = false;
-    }
-
-    /* If this bundle is attached to VRF, there is no need to do any special
-     * handling. Kernel will take care of routing. */
-    if (ofproto->vrf) {
-        return;
-    }
-
-    n_ports = list_size(&bundle->ports);
-
-    /* If there is only one slave, then it should be a regular port not a
-     * bundle. */
-    if (n_ports == 1) {
-        n = snprintf(cmd_str, MAX_CMD_LEN, "%s --may-exist add-port %s ",
-                     OVS_VSCTL, ofproto->up.name);
-    } else if (n_ports > 1) {
-        n = snprintf(cmd_str, MAX_CMD_LEN, "%s --may-exist add-bond %s %s",
-                     OVS_VSCTL, ofproto->up.name, bundle->name);
-    } else {
-        VLOG_INFO("Not enough ports to create a bundle, so skipping it.");
-    }
-
-    LIST_FOR_EACH_SAFE(port, next_port, bundle_node, &bundle->ports) {
-
-        n += snprintf(&cmd_str[n], (MAX_CMD_LEN - n), " %s",
-                      netdev_get_name(port->up.netdev));
-        ovs_assert(n <= MAX_CMD_LEN);
-    }
-
-    /* Always configure bond_mode as balance-slb to get active-active links. */
-    if (n_ports > 1) {
-        n += snprintf(&cmd_str[n], (MAX_CMD_LEN - n), " bond_mode=balance-slb");
-        ovs_assert(n <= MAX_CMD_LEN);
-    }
-
-    if (bundle->vlan_mode != PORT_VLAN_TRUNK) {
-        if ((bundle->vlan > 0)
-            && (bitmap_is_set(ofproto->vlans_bmp, bundle->vlan))) {
-            n += snprintf(&cmd_str[n], (MAX_CMD_LEN - n), " tag=%d",
-                          bundle->vlan);
-            ovs_assert(n <= MAX_CMD_LEN);
-        } else {
-            goto done;
-        }
-    }
-
-    /* The following logic is used for a port/bond in trunk mode:
-     * If the configuration didn’t list any trunk VLAN, trunk all VLANs that
-     * are enabled in the VLAN table (bit set in VLAN bitmap).
-     * If the configuration does list trunk VLANs, configure all of the VLANs
-     * in that list which are also enabled in the VLAN table.
-     *
-     * NOTE: If no VLANs are enabled in the VLAN bitmap, the port is not added
-     * in the Internal "ASIC" OVS */
-
-    if (bundle->vlan_mode != PORT_VLAN_ACCESS) {
-        for (i = 1; i < 4095; i++) {
-            if (bitmap_is_set(ofproto->vlans_bmp, i)) {
-                if (!(bundle->trunks) || bitmap_is_set(bundle->trunks, i)) {
-
-                    if (vlan_count == 0) {
-                        n += snprintf(&cmd_str[n], (MAX_CMD_LEN - n),
-                                      " trunks=%d", i);
-                    } else {
-                        n += snprintf(&cmd_str[n], (MAX_CMD_LEN - n), ",%d",
-                                      i);
-                    }
-
-                    ovs_assert(n <= MAX_CMD_LEN);
-                    vlan_count += 1;
-                }
-            }
-        }
-        /* If the trunk vlans are not defined in the global list. */
-        if (vlan_count == 0) {
-            goto done;
-        }
-    }
-
-    if (bundle->vlan_mode == PORT_VLAN_ACCESS) {
-        n += snprintf(&cmd_str[n], (MAX_CMD_LEN - n), " vlan_mode=access");
-        ovs_assert(n <= MAX_CMD_LEN);
-
-    } else if (bundle->vlan_mode == PORT_VLAN_TRUNK) {
-        n += snprintf(&cmd_str[n], (MAX_CMD_LEN - n), " vlan_mode=trunk");
-        ovs_assert(n <= MAX_CMD_LEN);
-
-    } else if (bundle->vlan_mode == PORT_VLAN_NATIVE_UNTAGGED) {
-        n += snprintf(&cmd_str[n], (MAX_CMD_LEN - n),
-                      " vlan_mode=native-untagged");
-        ovs_assert(n <= MAX_CMD_LEN);
-
-    } else if (bundle->vlan_mode == PORT_VLAN_NATIVE_TAGGED) {
-        n += snprintf(&cmd_str[n], (MAX_CMD_LEN - n),
-                      " vlan_mode=native-tagged");
-        ovs_assert(n <= MAX_CMD_LEN);
-    }
-
-    VLOG_DBG(cmd_str);
-
-    if (system(cmd_str) != 0) {
-        VLOG_ERR("Failed to create bundle. %s, %s", cmd_str, strerror(errno));
-    } else {
-        bundle->is_added_to_sim_ovs = true;
-    }
-
-done:
-    /* Install IP table rules to prevent the traffic going to kernel IP stack.
-     * When L2 switching is enabled on a port, ASIC OVS takes care of switching
-     * the packets. We only depend on kernel to do L3 routing. */
-    LIST_FOR_EACH_SAFE(port, next_port, bundle_node, &bundle->ports) {
-
-        if (port->iptable_rules_added == false) {
-            disable_port_in_iptables(netdev_get_name(port->up.netdev));
-            port->iptable_rules_added = true;
-        }
-    }
-#endif
-    return 0;
-err_ret:
-    // XXX : clean-up as needed
-    return ret_val;
-}
-#endif
 
 /* Bundles. */
 static int
@@ -936,7 +660,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     VLOG_INFO("bundle_set: name %s, n_slaves %d, vlan_mode %d, vlan %d, AUX = 0x%p, trunks = %p",
                 s->name, s->n_slaves, s->vlan_mode, s->vlan, aux,
                 s->trunks);
-    // XXX LAG is not supported
+    /* XXX LAG is not supported */
     if (s->n_slaves > 1) {
         VLOG_ERR("LAG not supported");
         return EINVAL;
@@ -974,7 +698,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         bundle->name = xstrdup(s->name);
     }
 
-    // XXX code taken from container plug-in check and fix when LAG is supported
+    /* XXX code taken from container plug-in check and fix when LAG is supported */
     /* Update set of ports. */
     ok = true;
     for (i = 0; i < s->n_slaves; i++) {
@@ -1018,7 +742,7 @@ found:     ;
         }
     }
     /* XXX If this bundle is attached to VRF or it is a VLAN based internal
-     * bundle
+     * bundle, then it is an L3 interface - TBD
      */
     if (ofproto->vrf == true) {
         VLOG_INFO("XXX L3 interface - skip");
@@ -1055,17 +779,6 @@ found:     ;
         return 0;
     }
 
-#if 0
-    /* If it is a bond, and there are less than two ports added to it, then
-     * postpone creating this bond in ASIC OVS until at least two ports are
-     * added to it. */
-    if ((s->slaves_entered > 1) && s->n_slaves <= 1) {
-        VLOG_INFO
-            ("LAG Doesn't have enough interfaces to enable. So delaying the creation.");
-        return 0;
-    }
-#endif
-
 #if 1
     {
     /* Need to check the old and new bundle parmeters to handle transitions
@@ -1085,7 +798,7 @@ found:     ;
     bundle->tag_mode = tag_mode;
 
     if (bundle->port_type != new_port_type) {
-        // delete old interface and associated vlan_port
+        /* delete old interface and associated vlan_port */
         p4_switch_interface_delete(bundle);
         bundle->port_type = new_port_type;
         p4_switch_interface_create(bundle);
@@ -1107,22 +820,23 @@ found:     ;
         bundle->vlan = s->vlan;
     }
     if (new_port_type == SWITCH_API_INTERFACE_L2_VLAN_ACCESS) {
-        // Access(natvie) vlan is handled above
+        /* Access(natvie) vlan is handled above */
     } else if (new_port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
         int b;
         bool vlans_changed = false;
-        // remove pv mapping for the vlans removed and add for the new ones
-        // XXX loop thru' vlans and add/remove only those ?? faster?
+        /* remove pv mapping for the vlans removed and add for the new ones
+         * XXX loop thru' vlans and add/remove only those ?? faster?
+         */
         for (b=0; b<VLAN_BITMAP_SIZE; b++) {
             bool vlan_old = false;
             bool vlan_new = false;
-            // if trunks == NULL => implicitly add all vlans
-            // if (!bundle->trunks || bitmap_is_set(bundle->trunks, b))
+            /* XXX if trunks == NULL => implicitly add all vlans  ??? */
+            /* if (!bundle->trunks || bitmap_is_set(bundle->trunks, b)) */
             if (bundle->trunks && bitmap_is_set(bundle->trunks, b))
             {
                 vlan_old = true;
             }
-            //if (!s->trunks || bitmap_is_set(s->trunks, b))
+            /* if (!s->trunks || bitmap_is_set(s->trunks, b)) */
             if (s->trunks && bitmap_is_set(s->trunks, b))
             {
                 vlan_new = true;
@@ -1152,8 +866,7 @@ found:     ;
             }
         }
     } else {
-        // XXX un-supported interface
-        VLOG_ERR("XXX un-supported interface type");
+        VLOG_ERR("un-supported interface type");
         return EINVAL;
     }
     VLOG_INFO("bundle_set - Done");
@@ -1177,35 +890,9 @@ bundle_get(struct ofproto *ofproto_, void *aux, int *bundle_handle)
     return 0;
 }
 
-static int
-bundle_set_reconfigure(struct ofproto *ofproto_, int vid)
-{
-#if 0
-    struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
-    struct ofbundle *bundle;
-
-    HMAP_FOR_EACH(bundle, hmap_node, &ofproto->bundles) {
-
-        /* bundles with VLAN routing enabled doesn't need re-configuration
-         * when L2 VLan config is changed. */
-        if ((bundle->is_vlan_routing_enabled == true) ||
-            (bundle->is_bridge_bundle == true)) {
-
-            continue;
-        }
-
-        /* Reconfiguring bundle with original configuration when VLAN is added
-         * and deleting the bundle when corresponding VLAN gets deleted */
-        bundle_configure(bundle);
-    }
-#endif
-    return 0;
-}
-
 static void
 bundle_remove(struct ofport *port_)
 {
-#if 1
     struct sim_provider_ofport *port = sim_provider_ofport_cast(port_);
     struct ofbundle *bundle = port->bundle;
 
@@ -1219,7 +906,6 @@ bundle_remove(struct ofport *port_)
             bundle_destroy(bundle);
         }
     }
-#endif
 }
 
 static void
@@ -1268,16 +954,6 @@ p4_bundles_vlan_update (struct sim_provider_node *ofproto, struct ofp4vlan *p4vl
     free(vlan_port);
 }
 
-// XXX:
-// create a list of vlans to store handles for all the vlans created
-// bundle: Add port_lag_handle union to store either port (single member bundle)
-// of lag handle created
-// set_vlan : add: go thru' all the bundles and create vlan_port for the new vlan
-//          : del: delete vlan_port for all bundles, delete vlan handle
-// bundle_set : trunk : add vlan_port for all vlans (check tagging mode for pvid vlan)
-//            : access : add vlan_port for pvid/native vlan
-// bundle_remove : trunk : remove port_vlan for all vlans
-//                 access : remove pvid port_vlan
 static int
 set_vlan(struct ofproto *ofproto_, int vid, bool add)
 {
@@ -1298,7 +974,7 @@ set_vlan(struct ofproto *ofproto_, int vid, bool add)
         VLOG_INFO("switch_api_vlan_create handle 0x%x", p4vlan->vlan_handle);
         hmap_insert(&ofproto->vlans, &p4vlan->hmap_node,
                     hash_int(vid, 0));
-        // add vlan to all applicable bundles
+        /* add vlan to all applicable bundles */
         p4_bundles_vlan_update(ofproto, p4vlan, true/*add*/);
     } else {
         if (p4vlan == NULL) {
@@ -1308,7 +984,7 @@ set_vlan(struct ofproto *ofproto_, int vid, bool add)
         VLOG_INFO("set_vlan: remove vid %d", vid);
         switch_api_vlan_delete(0, p4vlan->vlan_handle);
         hmap_remove(&ofproto->vlans, &p4vlan->hmap_node);
-        // remove vlan from all applicable bundles
+        /* remove vlan from all applicable bundles */
         p4_bundles_vlan_update(ofproto, p4vlan, false/*add*/);
         free(p4vlan);
     }
@@ -1422,6 +1098,8 @@ port_del(struct ofproto *ofproto_, ofp_port_t ofp_port)
     struct sim_provider_ofport *ofport = get_ofp_port(ofproto, ofp_port);
     int error = 0;
 
+    // XXX after executing no routing cnd, prot_del is getting called
+    // every few seconds for ever - not sure why
     VLOG_DBG("port_del: %d", ofp_port);
 #if 0
     // XXX - need to find the name to delete
@@ -1691,32 +1369,6 @@ get_netflow_ids(const struct ofproto *ofproto_ OVS_UNUSED,
 {
     return;
 }
-
-#if 0
-static enum ofperr
-set_config(struct ofproto *ofproto_,
-           ofp_port_t ofp_port, const struct smap *args)
-{
-    const struct ofport *ofport;
-    const char *vlan_arg;
-
-    ofproto_sim_provider_class;
-    ofport = ofproto_get_port(ofproto_, ofp_port);
-
-    if (ofport) {
-        vlan_arg = smap_get(args, "vlan_default");
-        VLOG_DBG("set_config port= %s ofp= %d option_arg= %s",
-                 netdev_get_name(ofport->netdev), ofport->ofp_port, vlan_arg);
-        return 0;
-    } else {
-        return ENODEV;
-    }
-}
-#endif
-
-// XXX
-// set_stp() - can be used to install the STP reasoncode to send STP BPDUs to CPU
-//
 
 const struct ofproto_class ofproto_sim_provider_class = {
     init,
