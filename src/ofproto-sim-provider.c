@@ -545,7 +545,9 @@ p4_switch_vlan_port_create (struct ofbundle *bundle, int32_t vlan)
         vlan_port.tagging_mode = bundle->tag_mode;
         VLOG_INFO("switch_api_vlan_ports_add - vlan 0x%x, port hdl 0x%x",
                     p4vlan->vlan_handle, vlan_port.handle);
-        switch_api_vlan_ports_add(0, p4vlan->vlan_handle, 1, &vlan_port);
+        if (switch_api_vlan_ports_add(0, p4vlan->vlan_handle, 1, &vlan_port)) {
+            VLOG_ERR("switch_api_vlan_ports_add - failed");
+        }
     }
     return;
 }
@@ -945,11 +947,15 @@ p4_bundles_vlan_update (struct sim_provider_node *ofproto, struct ofp4vlan *p4vl
     if (add) {
         VLOG_INFO("switch_api_vlan_ports_add vlan_hdl 0x%x, n_ports %d",
                         p4vlan->vlan_handle, l2_bundles);
-        switch_api_vlan_ports_add(0, p4vlan->vlan_handle, l2_bundles, vlan_port);
+        if (switch_api_vlan_ports_add(0, p4vlan->vlan_handle, l2_bundles, vlan_port)) {
+            VLOG_ERR("switch_api_vlan_ports_add - failed");
+        }
     } else {
         VLOG_INFO("switch_api_vlan_ports_remove vlan_hdl 0x%x, n_ports %d",
                         p4vlan->vlan_handle, l2_bundles);
-        switch_api_vlan_ports_remove(0, p4vlan->vlan_handle, l2_bundles, vlan_port);
+        if (switch_api_vlan_ports_remove(0, p4vlan->vlan_handle, l2_bundles, vlan_port)) {
+            VLOG_ERR("switch_api_vlan_ports_remove - failed");
+        }
     }
     free(vlan_port);
 }
@@ -1096,22 +1102,16 @@ port_del(struct ofproto *ofproto_, ofp_port_t ofp_port)
 {
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
     struct sim_provider_ofport *ofport = get_ofp_port(ofproto, ofp_port);
-    int error = 0;
+    char *netdev_name = NULL;
 
-    // XXX after executing no routing cnd, prot_del is getting called
-    // every few seconds for ever - not sure why
-    VLOG_DBG("port_del: %d", ofp_port);
-#if 0
-    // XXX - need to find the name to delete
-    if (sset_find(&ofproto->ports, xxx->name) == NULL) {
-        VLOG_ERR("port_del - %s does not exists", xxx->name);
+    ovs_assert(ofport);
+    netdev_name = netdev_get_name(ofport->up.netdev);
+    VLOG_DBG("port_del: %d, name = %s", ofp_port, netdev_name);
+    if (!sset_find_and_delete(&ofproto->ports, netdev_name)) {
+        VLOG_ERR("port_del - %s does not exists", netdev_name);
         return ENODEV;
     }
-
-    // XXX switch_api_interface_delete()
-    sset_delete(&ofproto->ports, xxx->name);
-#endif
-    return error;
+    return 0;
 }
 
 static int
