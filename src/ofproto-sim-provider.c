@@ -566,7 +566,9 @@ p4_switch_vlan_port_delete (struct ofbundle *bundle, int32_t vlan)
         vlan_port.tagging_mode = bundle->tag_mode;
         VLOG_INFO("switch_api_vlan_ports_remove - vlan 0x%x, port hdl 0x%x",
                     p4vlan->vlan_handle, vlan_port.handle);
-        switch_api_vlan_ports_remove(0, p4vlan->vlan_handle, 1, &vlan_port);
+        if (switch_api_vlan_ports_remove(0, p4vlan->vlan_handle, 1, &vlan_port)) {
+            VLOG_ERR("switch_api_vlan_ports_remove - failed");
+        }
     }
     return;
 }
