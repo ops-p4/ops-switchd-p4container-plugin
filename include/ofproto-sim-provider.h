@@ -82,6 +82,9 @@ struct ofbundle {
     switch_handle_t port_lag_handle; /* p4 api handle for port or lag
                                       * (or port when only 1 member) */
     switch_handle_t if_handle;  /* p4 api interface handle */
+
+    char *ip4_address;
+    char *ip6_address;
 };
 
 struct sim_provider_ofport {
@@ -180,6 +183,8 @@ struct sim_provider_node {
 
     bool vrf;                   /* Specifies whether specific ofproto instance
                                  * is backing up VRF and not bridge */
+    switch_handle_t vrf_handle; /* vrf id handle */
+    switch_handle_t rmac_handle;
 };
 
 struct sim_provider_port_dump_state {

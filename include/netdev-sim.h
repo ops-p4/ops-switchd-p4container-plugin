@@ -30,4 +30,7 @@ void netdev_sim_register(void);
 extern int netdev_get_device_port_handle(struct netdev *netdev_,
                 int32_t *device, switch_handle_t *port_handle);
 
+extern int netdev_get_port_rmac_handle(struct netdev *netdev_,
+                switch_handle_t *rmac_handle);
+
 #endif /* netdev-sim.h */
