@@ -20,21 +20,31 @@ limitations under the License.
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
-    
+
 static void *switch_handle_array;
-    
+
 int
 switch_handle_type_init(switch_handle_type_t type, unsigned int size)
 {
-    switch_handle_info_t              *handle_info = NULL;
-    switch_api_id_allocator           *allocator = NULL;
-    void                              *p = NULL;
+    return switch_handle_type_allocator_init(type, size*4,
+                                         true /*grow*/, false/*zero_based*/);
+}
+
+int
+switch_handle_type_allocator_init(switch_handle_type_t type,
+                                  unsigned int num_handles,
+                                  bool grow_on_demand, bool zero_based)
+{
+    switch_handle_info_t            *handle_info = NULL;
+    switch_api_id_allocator         *allocator = NULL;
+    void                            *p = NULL;
+    unsigned int                    size = (num_handles+3)/4;
 
     handle_info = switch_malloc(sizeof(switch_handle_info_t), 1);
     if (!handle_info) {
         return SWITCH_STATUS_FAILURE;
     }
-    allocator = switch_api_id_allocator_new (size, FALSE);
+    allocator = switch_api_id_allocator_new (size, zero_based);
     if (!allocator) {
         switch_free(handle_info);
         return -1;
@@ -43,6 +53,9 @@ switch_handle_type_init(switch_handle_type_t type, unsigned int size)
     handle_info->initial_size = size;
     handle_info->allocator = allocator;
     handle_info->num_in_use = 0;
+    handle_info->num_handles = num_handles;
+    handle_info->grow_on_demand = grow_on_demand;
+    handle_info->zero_based = zero_based;
     JLI(p, switch_handle_array, (unsigned int)type);
     if(p) {
        *(unsigned long *)p = (unsigned long)handle_info;
@@ -51,7 +64,7 @@ switch_handle_type_init(switch_handle_type_t type, unsigned int size)
     switch_free(handle_info);
     return SWITCH_STATUS_FAILURE;
 }
-    
+
 void
 switch_handle_type_free(switch_handle_type_t type)
 {
@@ -67,7 +80,7 @@ switch_handle_type_free(switch_handle_type_t type)
         switch_free(handle_info);
     }
 }
-    
+
 switch_handle_t
 switch_handle_allocate(switch_handle_type_t type)
 {
@@ -76,9 +89,12 @@ switch_handle_allocate(switch_handle_type_t type)
 
     JLG(p, switch_handle_array, (unsigned int)type);
     if((handle_info = (switch_handle_info_t *) (*(unsigned long *)p))) {
-        unsigned int id = switch_api_id_allocator_allocate (handle_info->allocator);
-        handle_info->num_in_use++;
-        return ((type << HANDLE_TYPE_SHIFT) | id);
+        if ((handle_info->num_in_use < handle_info->num_handles) ||
+             handle_info->grow_on_demand) {
+            unsigned int id = switch_api_id_allocator_allocate (handle_info->allocator);
+            handle_info->num_in_use++;
+            return ((type << HANDLE_TYPE_SHIFT) | id);
+        }
     }
     return SWITCH_API_INVALID_HANDLE;
 }
@@ -97,7 +113,7 @@ switch_handle_set_and_allocate(switch_handle_t type, unsigned int id)
     }
     return SWITCH_API_INVALID_HANDLE;
 }
-    
+
 void
 switch_handle_free(switch_handle_t handle)
 {
@@ -112,14 +128,14 @@ switch_handle_free(switch_handle_t handle)
         handle_info->num_in_use--;
     }
 }
-    
+
 switch_handle_type_t
 switch_handle_get_type(switch_handle_t handle)
 {
     switch_handle_type_t type = (handle & 0xF8000000) >> HANDLE_TYPE_SHIFT;
     return type;
 }
-    
+
 #ifdef SWITCH_HANDLE_TEST
 #include <stdio.h>
 #include <stdlib.h>
@@ -136,7 +152,7 @@ int _handle_main (int argc, char **argv)
     return 0;
 }
 #endif
-    
+
 #ifdef __cplusplus
 }
 #endif

@@ -25,21 +25,24 @@ limitations under the License.
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
-    
+
 static void *switch_lag_array;
+static void *switch_lag_member_array;
 static switch_api_id_allocator *lag_select;
-    
+
 #define SWITCH_INITIAL_LAG_SIZE 16
-    
+
 switch_status_t
 switch_lag_init(switch_device_t device)
 {
     UNUSED(device);
     switch_lag_array = NULL;
     lag_select = switch_api_id_allocator_new(64 * 1024/ 32, FALSE);
-    return switch_handle_type_init(SWITCH_HANDLE_TYPE_LAG, (1*1024));
+    switch_handle_type_init(SWITCH_HANDLE_TYPE_LAG, (1*1024));
+    switch_handle_type_init(SWITCH_HANDLE_TYPE_LAG_MEMBER, (1*1024));
+    return SWITCH_STATUS_SUCCESS;
 }
-    
+
 switch_status_t
 switch_lag_free(switch_device_t device)
 {
@@ -47,7 +50,7 @@ switch_lag_free(switch_device_t device)
     switch_handle_type_free(SWITCH_HANDLE_TYPE_LAG);
     return SWITCH_STATUS_SUCCESS;
 }
-    
+
 switch_handle_t
 switch_lag_handle_create()
 {
@@ -70,6 +73,38 @@ switch_api_lag_get_internal(switch_handle_t lag_handle)
     switch_lag_info_t *lag_info = NULL;
     _switch_handle_get(switch_lag_info_t, switch_lag_array, lag_handle, lag_info);
     return lag_info;
+}
+
+switch_handle_t
+switch_lag_member_handle_create()
+{
+    switch_handle_t lag_member_handle;
+    _switch_handle_create(SWITCH_HANDLE_TYPE_LAG_MEMBER,
+                          switch_lag_member_t,
+                          switch_lag_member_array,
+                          &info,
+                          lag_member_handle);
+    return lag_member_handle;
+}
+
+switch_status_t
+switch_lag_member_handle_delete(switch_handle_t lag_member_handle)
+{
+    _switch_handle_delete(switch_lag_member_t,
+                          switch_lag_member_array,
+                          lag_member_handle);
+    return SWITCH_STATUS_SUCCESS;
+}
+
+switch_lag_member_t *
+switch_api_lag_member_get_internal(switch_handle_t lag_member_handle)
+{
+    switch_lag_member_t *lag_member = NULL;
+    _switch_handle_get(switch_lag_member_t,
+                       switch_lag_member_array,
+                       lag_member_handle,
+                       lag_member);
+    return lag_member;
 }
 
 switch_handle_t
@@ -99,7 +134,7 @@ switch_api_lag_create(switch_device_t device)
 #endif
     return lag_handle;
 }
-    
+
 switch_status_t
 switch_api_lag_delete(switch_device_t device, switch_handle_t lag_handle)
 {
@@ -126,7 +161,7 @@ switch_api_lag_delete(switch_device_t device, switch_handle_t lag_handle)
     switch_lag_handle_delete(lag_handle);
     return SWITCH_STATUS_SUCCESS;
 }
- 
+
 switch_status_t
 switch_api_lag_member_add(switch_device_t device, switch_handle_t lag_handle,
                           switch_direction_t direction, switch_port_t port)
@@ -134,6 +169,7 @@ switch_api_lag_member_add(switch_device_t device, switch_handle_t lag_handle,
     switch_status_t                    status = SWITCH_STATUS_SUCCESS;
     switch_lag_info_t                 *lag_info = NULL;
     switch_lag_member_t               *lag_member = NULL;
+    switch_handle_t                    lag_member_handle = 0;
     switch_port_info_t                *port_info = NULL;
 
     if (!SWITCH_LAG_HANDLE_VALID(lag_handle)) {
@@ -152,25 +188,29 @@ switch_api_lag_member_add(switch_device_t device, switch_handle_t lag_handle,
         }
     }
 
-    lag_member = switch_malloc(sizeof(switch_lag_member_t), 1);
+    lag_member_handle = switch_lag_member_handle_create();
+    lag_member = switch_api_lag_member_get_internal(lag_member_handle);
     if (!lag_member) {
         return SWITCH_STATUS_NO_MEMORY;
     }
 
     lag_member->index = switch_api_id_allocator_allocate(lag_info->egr_bmap);
     lag_member->port = port;
+    lag_member->lag_member_handle = lag_member_handle;
+    lag_member->lag_handle = lag_handle;
+    lag_member->direction = direction;
 
     switch (direction) {
         case SWITCH_API_DIRECTION_BOTH:
         case SWITCH_API_DIRECTION_EGRESS:
             tommy_list_insert_head(&lag_info->egress,
-                    &(lag_member->egress_node), 
+                    &(lag_member->egress_node),
                     lag_member);
             port_info = switch_api_port_get_internal(port);
             if (!port_info) {
                 return SWITCH_STATUS_INVALID_PORT_NUMBER;
             }
-            status = switch_pd_lag_member_add(device, lag_info->pd_group_hdl, 
+            status = switch_pd_lag_member_add(device, lag_info->pd_group_hdl,
                                               SWITCH_PORT_ID(port_info),
                                               &(lag_member->mbr_hdl));
             if (status != SWITCH_STATUS_SUCCESS) {
@@ -196,7 +236,7 @@ switch_api_lag_member_add(switch_device_t device, switch_handle_t lag_handle,
                 break;
         case SWITCH_API_DIRECTION_INGRESS:
             tommy_list_insert_head(&lag_info->ingress,
-                    &(lag_member->ingress_node), 
+                    &(lag_member->ingress_node),
                     lag_member);
             // lookup port table
             port_info = switch_api_port_get_internal(port);
@@ -220,7 +260,7 @@ switch_api_lag_member_add(switch_device_t device, switch_handle_t lag_handle,
     }
     return status;
 }
-    
+
 switch_status_t
 switch_api_lag_member_delete(switch_device_t device, switch_handle_t lag_handle,
                              switch_direction_t direction, switch_port_t port)
@@ -315,7 +355,88 @@ switch_api_lag_member_delete(switch_device_t device, switch_handle_t lag_handle,
     }
     return status;
 }
-    
+
+switch_handle_t
+switch_api_lag_member_create(
+        switch_device_t device,
+        switch_handle_t lag_handle,
+        switch_direction_t direction,
+        switch_port_t port)
+{
+    switch_lag_info_t                 *lag_info = NULL;
+    tommy_node                        *node = NULL;
+    switch_handle_t                    lag_member_handle = 0;
+    switch_status_t                    status = SWITCH_STATUS_SUCCESS;
+    switch_lag_member_t               *lag_member = NULL;
+
+    if (!SWITCH_LAG_HANDLE_VALID(lag_handle)) {
+        return SWITCH_STATUS_INVALID_HANDLE;
+    }
+
+    lag_info = switch_api_lag_get_internal(lag_handle);
+    if (!lag_info) {
+        return SWITCH_STATUS_INVALID_HANDLE;
+    }
+
+    status = switch_api_lag_member_add(
+                             device,
+                             lag_handle,
+                             direction,
+                             port);
+
+    if (status != SWITCH_STATUS_SUCCESS) {
+        return SWITCH_API_INVALID_HANDLE;
+    }
+
+    if (direction == SWITCH_API_DIRECTION_BOTH ||
+        direction == SWITCH_API_DIRECTION_INGRESS) {
+        node = tommy_list_head(&(lag_info->ingress));
+    } else {
+        node = tommy_list_head(&(lag_info->egress));
+    }
+
+    while (node) {
+        lag_member = node->data;
+        if (lag_member->port == port) {
+            break;
+        }
+        node = node->next;
+    }
+
+    if (lag_member) {
+        lag_member_handle = lag_member->lag_member_handle;
+    }
+
+    return lag_member_handle;
+}
+
+switch_status_t
+switch_api_lag_member_remove(
+        switch_device_t device,
+        switch_handle_t lag_member_handle)
+{
+    switch_lag_member_t               *lag_member = NULL;
+    switch_lag_info_t                 *lag_info = NULL;
+    switch_status_t                    status = SWITCH_STATUS_SUCCESS;
+
+    lag_member = switch_api_lag_member_get_internal(lag_member_handle);
+    if (!lag_member) {
+        return SWITCH_STATUS_INVALID_PARAMETER;
+    }
+
+    lag_info = switch_api_lag_get_internal(lag_member->lag_handle);
+    if (!lag_info) {
+        return SWITCH_STATUS_INVALID_PARAMETER;
+    }
+
+    status = switch_api_lag_member_delete(
+                             device,
+                             lag_member->lag_handle,
+                             lag_member->direction,
+                             lag_member->port);
+    return status;
+}
+
 unsigned int
 switch_lag_get_count(switch_handle_t lag_handle)
 {
@@ -369,14 +490,14 @@ switch_api_lag_print_all(void)
     }
     return SWITCH_STATUS_SUCCESS;
 }
-    
+
 #ifdef SWITCH_LAG_TEST
 int lag_main (int argc, char **argv)
 {
     return 0;
 }
 #endif
-    
+
 #ifdef __cplusplus
 }
 #endif
