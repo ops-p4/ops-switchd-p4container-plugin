@@ -27,6 +27,7 @@
 #include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <net/if.h>
+#include <netinet/ether.h>
 
 #include <openswitch-idl.h>
 
@@ -73,6 +74,7 @@ struct netdev_sim {
     uint32_t port_num;
     switch_handle_t hostif_handle;
     switch_handle_t port_handle;
+    switch_handle_t rmac_handle;
 };
 
 static int netdev_sim_construct(struct netdev *);
@@ -210,6 +212,22 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
                                                         netdev->port_num-1);
             VLOG_INFO("P4:set_hw_intf create tap interface for port, %d",
                                                         netdev->port_num);
+
+            if (mac_addr) {
+                VLOG_INFO("mac address on port %d : %s", netdev->port_num, mac_addr);
+                struct ether_addr *ether_mac = ether_aton(mac_addr);
+                if (ether_mac != NULL) {
+                    memcpy(netdev->hwaddr, ether_mac, ETH_ALEN);
+                    netdev->rmac_handle = switch_api_router_mac_group_create(0x0);
+                    switch_mac_addr_t mac;
+                    switch_status_t status = SWITCH_STATUS_SUCCESS;
+                    memcpy(&mac.mac_addr, netdev->hwaddr, sizeof(switch_mac_addr_t));
+                    status = switch_api_router_mac_add(0x0, netdev->rmac_handle, &mac);
+                    if (status != SWITCH_STATUS_SUCCESS) {
+                        VLOG_INFO("P4: failed to add router mac for port %d", hw_id);
+                    }
+                }
+            }
 
             /* create a tap interface */
             sprintf(cmd, "%s /sbin/ip tuntap add dev %s mode tap",
@@ -483,6 +501,14 @@ int netdev_get_device_port_handle(struct netdev *netdev_,
     struct netdev_sim *netdev = netdev_sim_cast(netdev_);
     *device = 0;
     *port_handle = netdev->port_handle;
+    return 0;
+}
+
+int netdev_get_port_rmac_handle(struct netdev *netdev_,
+                switch_handle_t *rmac_handle)
+{
+    struct netdev_sim *netdev = netdev_sim_cast(netdev_);
+    *rmac_handle = netdev->rmac_handle;
     return 0;
 }
 
