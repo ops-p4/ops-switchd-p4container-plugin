@@ -19,6 +19,7 @@ limitations under the License.
 #define INT_EP_ENABLE
 #define INT_TRANSIT_ENABLE
 #define STATS_DISABLE   // for BMV2
+#define STORM_CONTROL_DISABLE
 #define OUTER_PIM_BIDIR_OPTIMIZATION
 #define PIM_BIDIR_OPTIMIZATION
 

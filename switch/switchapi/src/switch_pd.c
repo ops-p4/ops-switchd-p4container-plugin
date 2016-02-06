@@ -6105,22 +6105,6 @@ switch_pd_acl_table_add_default_entry(switch_device_t device)
                                                    &entry_hdl);
 #endif /* P4_QOS_DISABLE */
 
-#ifndef P4_DOD_MIRROR_DISABLE
-    {
-        p4_pd_dc_system_acl_match_spec_t      match_spec;
-
-        memset(&match_spec, 0, sizeof(p4_pd_dc_system_acl_match_spec_t));
-        match_spec.ingress_metadata_enable_dod = 1;
-        match_spec.ingress_metadata_enable_dod_mask = 1;
-        status = p4_pd_dc_system_acl_table_add_with_congestion_mirror_set(
-                                                g_sess_hdl,
-                                                p4_pd_device,
-                                                &match_spec,
-                                                511, // last entry
-                                                &entry_hdl);
-    }
-#endif
-
 #ifndef P4_STATS_DISABLE
     status = p4_pd_dc_drop_stats_set_default_action_drop_stats_update(
         g_sess_hdl,
