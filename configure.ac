@@ -24,7 +24,7 @@ AS_IF([test "x$enable_coverage" = "xyes"], [
     COVERAGE_FLAGS="--coverage"
 ])
 
-#AC_PROG_CC_STDC
+AC_PROG_CC_STDC
 AC_PROG_CXX
 LT_INIT
 
@@ -78,6 +78,9 @@ AC_ARG_ENABLE([bmv2], \
 	esac], [])
 
 AM_CONDITIONAL(TARGET_BMV2, [test "x$p4target" =  "xbmv2"])
+
+#AX_CHECK_COMPILE_FLAG(['-std=c11'], [CFLAGS+=" -std=c11"], [])
+CFLAGS += " -std=c11"
 
 # Generate makefiles
 AC_CONFIG_FILES([switch/switchapi/third-party/tommyds/Makefile switch/switchapi/Makefile
