@@ -165,7 +165,7 @@ ofproto_install_l3_acl()
 
     api_rcode_info.channel = SWITCH_HOSTIF_CHANNEL_NETDEV;
     api_rcode_info.priority = 1000;
-    api_rcode_info.action = SWITCH_ACL_ACTION_REDIRECT_TO_CPU;
+    api_rcode_info.action = SWITCH_ACL_ACTION_COPY_TO_CPU;
 
     api_rcode_info.reason_code = SWITCH_HOSTIF_REASON_CODE_ARP_REQUEST;
     status = switch_api_hostif_reason_code_create(
@@ -235,6 +235,7 @@ construct(struct ofproto *ofproto_)
         ofproto->vrf_handle = switch_api_vrf_create(0, 1);
         switch_mac_addr_t mac;
         switch_status_t status = SWITCH_STATUS_SUCCESS;
+        // XXX get rmac from interface ?? on first interface added to a VRF ??
         mac.mac_addr[0] = 0x00;
         mac.mac_addr[1] = 0x77;
         mac.mac_addr[2] = 0x66;
@@ -545,7 +546,8 @@ bundle_destroy(struct ofbundle *bundle)
     struct sim_provider_ofport *port = NULL, *next_port = NULL;
 
     VLOG_INFO("bundle_destroy %s", bundle->name);
-    if (ofproto->vrf || bundle->is_bridge_bundle) {
+    if (bundle->is_bridge_bundle) {
+        VLOG_INFO("XXX bundle not destroyed - TBD");
         return;
     }
     p4_switch_interface_delete (bundle);
@@ -821,13 +823,6 @@ found:     ;
             type = netdev_get_type(port->up.netdev);
         }
     }
-    /* XXX If this bundle is attached to VRF or it is a VLAN based internal
-     * bundle, then it is an L3 interface - TBD
-     */
-    if (ofproto->vrf == true) {
-        //VLOG_INFO("XXX L3 interface - skip");
-        //return 0;
-    }
 
     /* If it is bridge's internal bundle return from here. */
     if(strcmp(bundle->name, "bridge_normal") == 0) {
@@ -874,8 +869,11 @@ found:     ;
 
     VLOG_INFO("bundle_set: bundle vlan %d", bundle->vlan);
 
-    /* XXX tag_mode is not supported yet. It is always untagged for native vlans */
-    if (bundle->vlan != -1 && bundle->trunks != NULL) {
+    /* XXX If this bundle is attached to VRF or it is a VLAN based internal
+     * bundle, then it is an L3 interface
+     */
+    if (ofproto->vrf == false) {
+        /* XXX tag_mode is not supported yet. It is always untagged for native vlans */
         vlan_mode_to_port_type(s->vlan_mode, &new_port_type, &tag_mode);
     } else {
         new_port_type = SWITCH_API_INTERFACE_L3;
@@ -1598,6 +1596,8 @@ port_ip_reconfigure(struct ofproto *ofproto, struct ofbundle *bundle,
     /* If primary ipv4 got added/deleted/modified */
     if (s->ip_change & PORT_PRIMARY_IPv4_CHANGED) {
         if (s->ip4_address) {
+            // XXX simplify - if old addr ! NULL remove
+            // if new_addr != NULL add ??
             if (bundle->ip4_address) {
                 if (strcmp(bundle->ip4_address, s->ip4_address) != 0) {
                     /* If current and earlier are different, delete old */
