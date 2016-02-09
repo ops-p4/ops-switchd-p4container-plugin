@@ -697,13 +697,12 @@ p4_switch_interface_delete (struct ofbundle *bundle)
     if (bundle->port_type == SWITCH_API_INTERFACE_L2_VLAN_ACCESS) {
         VLOG_INFO("switch_api_interface_delete(access) - if_handle 0x%x",
                     bundle->if_handle);
-    }
-    if (bundle->port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
+    } else if (bundle->port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
         int b;
         if (bundle->trunks) {
             /* Delete pv mappings for all trunk vlans */
             for (b=0; b<VLAN_BITMAP_SIZE; b++) {
-                if (bitmap_is_set(bundle->trunks, b)) {
+                if (bundle->trunks && bitmap_is_set(bundle->trunks, b)) {
                     VLOG_INFO("delete trunk vlan %d", b);
                     p4_switch_vlan_port_delete(bundle, b);
                 }
@@ -712,6 +711,9 @@ p4_switch_interface_delete (struct ofbundle *bundle)
             bundle->trunks = NULL;
         }
         VLOG_INFO("switch_api_interface_delete (trunk) - if_handle 0x%x",
+                    bundle->if_handle);
+    } else {
+        VLOG_INFO("switch_api_interface_delete (L3) - if_handle 0x%x",
                     bundle->if_handle);
     }
     switch_api_interface_delete(0, bundle->if_handle);
@@ -734,6 +736,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     int ret_val = 0;
 
     if (s == NULL) {
+        VLOG_INFO("bundle_set: settings==NULL => destroy");
         bundle_destroy(bundle_lookup(ofproto, aux));
         return 0;
     }
