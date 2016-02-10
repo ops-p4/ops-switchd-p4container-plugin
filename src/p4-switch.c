@@ -23,7 +23,7 @@
 #include "openvswitch/vlog.h"
 #include "p4-switch.h"
 
-VLOG_DEFINE_THIS_MODULE(p4_sim_plugin);
+VLOG_DEFINE_THIS_MODULE(P4_sim_plugin);
 
 void
 p4_switch_init()
