@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
  * Copyright (C) 2015 Hewlett-Packard Development Company, L.P.
+ * XXX Add BFN (C) 2016 here ???
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +38,7 @@
 
 
 #define SWNS_EXEC       "/sbin/ip netns exec swns"
+#define EMULNS_EXEC     "/sbin/ip netns exec emulns"
 
 VLOG_DEFINE_THIS_MODULE(P4_netdev_sim);
 
@@ -338,9 +340,6 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
         if(pause)
             get_interface_pause_config(pause, &(netdev->pause_rx), &(netdev->pause_tx));
 
-        sprintf(cmd, "%s /sbin/ip link set dev %s up",
-                SWNS_EXEC, netdev->linux_intf_name);
-
         if (netdev->hostif_handle == SWITCH_API_INVALID_HANDLE) {
             memset(&hostif, 0, sizeof(hostif));
             hostif.handle = netdev->port_handle;
@@ -357,11 +356,18 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
         netdev->pause_tx = false;
         netdev->pause_rx = false;
 
-        sprintf(cmd, "%s /sbin/ip link set dev %s down",
-                SWNS_EXEC, netdev->linux_intf_name);
         switch_api_hostif_delete(0, netdev->hostif_handle);
         netdev->hostif_handle = SWITCH_API_INVALID_HANDLE;
     }
+    sprintf(cmd, "%s /sbin/ip link set dev %s %s",
+                SWNS_EXEC, netdev->linux_intf_name, hw_enable ? "up" : "down");
+    if (system(cmd) != 0) {
+        VLOG_ERR("system command failure: cmd=%s",cmd);
+    }
+
+    /* also operate on emulns interface that feed into model */
+    sprintf(cmd, "%s /sbin/ip link set dev %s %s",
+                EMULNS_EXEC, netdev->linux_intf_name, hw_enable ? "up" : "down");
     if (system(cmd) != 0) {
         VLOG_ERR("system command failure: cmd=%s",cmd);
     }

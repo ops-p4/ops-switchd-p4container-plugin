@@ -1,6 +1,7 @@
 /*
  * (c) Copyright 2015 Hewlett Packard Enterprise Development LP
  * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * XXX Add BFN (C) 2016 here ???
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +43,8 @@ VLOG_DEFINE_THIS_MODULE(P4_ofproto_provider_sim);
 #define MAX_CMD_LEN             2048
 #define SWNS_EXEC               "/sbin/ip netns exec swns"
 
-#define VLAN_BITMAP_SIZE    4096 /* XXX find if this is defined somewhere */
+#define VLAN_BITMAP_SIZE        4096 /* XXX find if this is defined somewhere */
+#define P4_HANDLE_IS_VALID(_h)  ((_h) != SWITCH_API_INVALID_HANDLE)
 
 static void p4_switch_vlan_port_delete (struct ofbundle *bundle, int32_t vlan);
 static void p4_switch_interface_delete (struct ofbundle *bundle);
@@ -154,7 +156,7 @@ dealloc(struct ofproto *ofproto_)
 }
 
 static int
-ofproto_install_l3_acl()
+ofproto_install_l3_acl() /* XXX - change name to p4_install_system_arp_acl ?? */
 {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     switch_api_hostif_rcode_info_t api_rcode_info;
@@ -395,53 +397,11 @@ p4vlan_lookup(const struct sim_provider_node *ofproto, uint32_t vid)
 static void
 enable_port_in_iptables(const char *port_name)
 {
-#if 0
-    char cmd[MAX_CMD_LEN];
-
-    snprintf(cmd, MAX_CMD_LEN, "%s iptables -D INPUT -i %s -j DROP",
-             SWNS_EXEC, port_name);
-    if (system(cmd) != 0) {
-        VLOG_ERR("Failed to delete DROP rule. cmd=%s rc=%s", cmd,
-                 strerror(errno));
-    }
-
-    snprintf(cmd, MAX_CMD_LEN, "%s iptables -D FORWARD -i %s -j DROP",
-             SWNS_EXEC, port_name);
-    if (system(cmd) != 0) {
-        VLOG_ERR("Failed to delete DROP rule. cmd=%s rc=%s", cmd,
-                 strerror(errno));
-    }
-#endif
 }
 
 static void
 disable_port_in_iptables(const char *port_name)
 {
-#if 0
-    int rc = 0;
-    char cmd[MAX_CMD_LEN];
-
-    /* Do not add drop rules if the "Check" command returns success. */
-    snprintf(cmd, MAX_CMD_LEN, "%s iptables -C INPUT -i %s -j DROP",
-             SWNS_EXEC, port_name);
-    rc = system(cmd);
-    if (rc != 0) {
-
-        snprintf(cmd, MAX_CMD_LEN, "%s iptables -A INPUT -i %s -j DROP",
-                 SWNS_EXEC, port_name);
-        if (system(cmd) != 0) {
-            VLOG_ERR("Failed to add DROP rules: cmd=%s rc=%s", cmd,
-                     strerror(errno));
-        }
-
-        snprintf(cmd, MAX_CMD_LEN, "%s iptables -A FORWARD -i %s -j DROP",
-                 SWNS_EXEC, port_name);
-        if (system(cmd) != 0) {
-            VLOG_ERR("Failed to add DROP rules: cmd=%s rc=%s", cmd,
-                     strerror(errno));
-        }
-    }
-#endif
 }
 
 static void
@@ -480,65 +440,6 @@ bundle_add_port(struct ofbundle *bundle, ofp_port_t ofp_port)
     }
 
     return true;
-}
-
-static void
-sim_bridge_vlan_routing_update(struct sim_provider_node *ofproto, int vlan,
-                               bool add)
-{
-#if 0
-    int i = 0, n = 0;
-    int vlan_count = 0;
-    char cmd_str[MAX_CMD_LEN];
-
-    if (add) {
-
-        /* If the vlan is already added to the list. */
-        if (bitmap_is_set(ofproto->vlan_intf_bmp, vlan)) {
-            return;
-        }
-
-        /* Save the VLAN routing interface IDs. */
-        bitmap_set1(ofproto->vlan_intf_bmp, vlan);
-
-    } else {
-
-        /* If the vlan is already unset in the list. */
-        if (!bitmap_is_set(ofproto->vlan_intf_bmp, vlan)) {
-            return;
-        }
-
-        /* Unset the VLAN routing interface IDs. */
-        bitmap_set0(ofproto->vlan_intf_bmp, vlan);
-    }
-
-    n = snprintf(cmd_str, MAX_CMD_LEN, "%s set port %s ", OVS_VSCTL,
-                 ofproto->up.name);
-
-    for (i = 1; i < 4095; i++) {
-
-        if (bitmap_is_set(ofproto->vlan_intf_bmp, i)) {
-
-            if (vlan_count == 0) {
-                n += snprintf(&cmd_str[n], (MAX_CMD_LEN - n), " trunks=%d", i);
-            } else {
-                n += snprintf(&cmd_str[n], (MAX_CMD_LEN - n), ",%d", i);
-            }
-            ovs_assert(n <= MAX_CMD_LEN);
-
-            vlan_count += 1;
-        }
-    }
-
-    if (vlan_count == 0) {
-        n += snprintf(&cmd_str[n], (MAX_CMD_LEN - n), " trunks=0");
-    }
-
-    if (system(cmd_str) != 0) {
-        VLOG_ERR("Failed to modify bridge interface trunks: cmd=%s, rc=%s",
-                 cmd_str, strerror(errno));
-    }
-#endif
 }
 
 /* Freeing up bundle and its members on heap */
@@ -582,18 +483,17 @@ vlan_mode_to_port_type(int32_t vlan_mode, int32_t *port_type, int32_t *tag_mode)
         *port_type = SWITCH_API_INTERFACE_L2_VLAN_ACCESS;
         *tag_mode = SWITCH_VLAN_PORT_UNTAGGED;
     } else if (vlan_mode == PORT_VLAN_TRUNK) {
-        /* XXX */
+        /* XXX - only untagged mode is support */
     } else if (vlan_mode == PORT_VLAN_NATIVE_TAGGED) {
         /* XXX */
     } else if (vlan_mode == PORT_VLAN_NATIVE_UNTAGGED) {
-        /* XXX */
+        /* XXX - only untagged mode is support */
     } else {
         *port_type = SWITCH_API_INTERFACE_NONE;
     }
     return;
 }
 
-#define P4_HANDLE_IS_VALID(_h) ((_h) != SWITCH_API_INVALID_HANDLE)
 static void
 p4_switch_vlan_port_create (struct ofbundle *bundle, int32_t vlan)
 {
@@ -736,6 +636,8 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     struct ofbundle *bundle;
     unsigned long *trunks = NULL;
     int ret_val = 0;
+    int32_t new_port_type = 0;
+    int32_t tag_mode = 0;
 
     if (s == NULL) {
         VLOG_INFO("bundle_set: settings==NULL => destroy");
@@ -860,7 +762,6 @@ found:     ;
         return 0;
     }
 
-    {
     /* Need to check the old and new bundle parmeters to handle transitions
      * Old          :   New
      * Access, v1   : Access, v2 -> delete pv1, create pv2
@@ -869,16 +770,14 @@ found:     ;
      * Trunk, vlans1: Trunk vlans2 -> delete pv(remove), create pv(added)
      * Trunk        : Access, v1 -> delete pv(all), delete intf, create intf, create pv1
      */
-    int32_t new_port_type = 0;
-    int32_t tag_mode = 0;
 
-    /* XXX If this bundle is attached to VRF or it is a VLAN based internal
-     * bundle, then it is an L3 interface
-     */
     if (ofproto->vrf == false) {
         /* XXX tag_mode is not supported yet. It is always untagged for native vlans */
         vlan_mode_to_port_type(s->vlan_mode, &new_port_type, &tag_mode);
     } else {
+        /* If this bundle is attached to VRF or it is a VLAN based internal
+         * bundle, then it is an L3 interface
+         */
         new_port_type = SWITCH_API_INTERFACE_L3;
     }
     bundle->vlan_mode = s->vlan_mode;
@@ -892,7 +791,7 @@ found:     ;
     }
 
     /* bundle->trunks bitmap bit is set if -
-     * - native_vlan
+     * - native_vlan (always added to trunks bitmap even if not added by the user)
      * - user specified allowed vlan list (s->trunks)
      * - all the vlans programmed in the h/w due to allow_all sematics
      * Bits corresponding to native vlan and user specified vlans are always set even if
@@ -929,16 +828,14 @@ found:     ;
         /* Access(natvie) vlan is handled above */
     } else if (new_port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
         int b;
-        /* remove pv mapping for the vlans removed and add for the new ones
-         * XXX loop thru' vlans and add/remove only those ?? faster?
-         */
+        /* remove pv mapping for the vlans removed and add for the new ones */
         bundle->allow_all_trunks = (s->trunks == NULL); // NULL indicates allow all
         for (b=0; b<VLAN_BITMAP_SIZE; b++) {
             bool vlan_old = false;
             bool vlan_new = false;
 
             if (bundle->vlan == b) {
-                continue; // handled separately
+                continue; // handled earlier
             }
             if (bitmap_is_set(bundle->trunks, b))
             {
@@ -973,7 +870,6 @@ found:     ;
         return EINVAL;
     }
     VLOG_INFO("bundle_set - Done");
-    } /* temp - remove {} */
     return ret_val;
 }
 
@@ -1090,7 +986,6 @@ set_vlan(struct ofproto *ofproto_, int vid, bool add)
         VLOG_INFO("set_vlan: vid %d", vid);
         p4vlan = xmalloc(sizeof (struct ofp4vlan));
         p4vlan->vid = vid;
-        // XXX device
         p4vlan->vlan_handle = switch_api_vlan_create(0, vid);
         VLOG_INFO("switch_api_vlan_create handle 0x%x", p4vlan->vlan_handle);
         hmap_insert(&ofproto->vlans, &p4vlan->hmap_node,

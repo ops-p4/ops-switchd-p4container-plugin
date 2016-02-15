@@ -57,10 +57,9 @@ struct ofbundle {
     struct ovs_list ports;      /* Contains "struct ofport"s. */
 
     enum port_vlan_mode vlan_mode;      /* VLAN mode */
-    int vlan;                   /* -1=trunk port, else a 12-bit VLAN ID. */
-    unsigned long *trunks;      /* Bitmap of trunked VLANs, if 'vlan' == -1.
-                                 * NULL if all VLANs are trunked. */
-    bool allow_all_trunks;
+    int vlan;                   /* native vlan */
+    unsigned long *trunks;      /* Bitmap of allowed trunked VLANs */
+    bool allow_all_trunks;      /* user did not specify trunks bitmap => allow all vlans */
     struct lacp *lacp;          /* LACP if LACP is enabled, otherwise NULL. */
     struct bond *bond;          /* Nonnull iff more than one port. */
     bool use_priority_tags;     /* Use 802.1p tag for frames in VLAN 0? */
