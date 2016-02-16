@@ -314,11 +314,13 @@ query_tables(struct ofproto *ofproto,
     return;
 }
 
+#ifdef OVS_2_5
 static void
 set_table_version(struct ofproto *ofproto_, cls_version_t version)
 {
     return;
 }
+#endif
 
 static struct ofport *
 port_alloc(void)
@@ -1233,12 +1235,23 @@ rule_construct(struct rule *rule_ OVS_UNUSED)
     return 0;
 }
 
+#ifdef OVS_2_5
 static void rule_insert(struct rule *rule, struct rule *old_rule,
                     bool forward_stats)
 OVS_REQUIRES(ofproto_mutex)
 {
     return;
 }
+
+#else
+static enum ofperr
+rule_insert(struct rule *rule_ OVS_UNUSED)
+OVS_REQUIRES(ofproto_mutex)
+{
+    return 0;
+}
+
+#endif
 
 static void
 rule_delete(struct rule *rule_ OVS_UNUSED)
@@ -1260,12 +1273,23 @@ rule_get_stats(struct rule *rule_ OVS_UNUSED, uint64_t * packets OVS_UNUSED,
     return;
 }
 
+#ifdef OVS_2_5
 static enum ofperr
 rule_execute(struct rule *rule OVS_UNUSED, const struct flow *flow OVS_UNUSED,
              struct dp_packet *packet OVS_UNUSED)
 {
     return 0;
 }
+
+#else
+
+static enum ofperr
+rule_execute(struct rule *rule OVS_UNUSED, const struct flow *flow OVS_UNUSED,
+             struct ofpbuf *packet OVS_UNUSED)
+{
+    return 0;
+}
+#endif
 
 static void
 rule_modify_actions(struct rule *rule_ OVS_UNUSED,
@@ -1338,6 +1362,20 @@ set_frag_handling(struct ofproto *ofproto_ OVS_UNUSED,
     return false;
 }
 
+#ifdef OVS_2_5
+
+static enum ofperr
+packet_out(struct ofproto *ofproto_ OVS_UNUSED,
+           struct ofpbuf *packet OVS_UNUSED,
+           const struct flow *flow OVS_UNUSED,
+           const struct ofpact *ofpacts OVS_UNUSED,
+           size_t ofpacts_len OVS_UNUSED)
+{
+    return 0;
+}
+
+#else
+
 static enum ofperr
 packet_out(struct ofproto *ofproto_ OVS_UNUSED,
            struct dp_packet *packet OVS_UNUSED,
@@ -1348,12 +1386,20 @@ packet_out(struct ofproto *ofproto_ OVS_UNUSED,
     return 0;
 }
 
+#endif  /* OVS_2_5 */
+
 static void
 get_netflow_ids(const struct ofproto *ofproto_ OVS_UNUSED,
                 uint8_t * engine_type OVS_UNUSED,
                 uint8_t * engine_id OVS_UNUSED)
 {
     return;
+}
+
+static switch_handle_t
+l3_route_nhop_glean_get()
+{
+    return switch_api_cpu_nhop_get(SWITCH_HOSTIF_REASON_CODE_GLEAN);
 }
 
 static int
@@ -1431,7 +1477,7 @@ port_l3_host_add(struct ofproto *ofproto_, bool is_ipv6, char *ip_addr)
         ip_address.prefix_len = 128;
     }
 
-    nhop_handle = switch_api_cpu_nhop_get(SWITCH_HOSTIF_REASON_CODE_GLEAN);
+    nhop_handle = l3_route_nhop_glean_get();
 
     status = switch_api_l3_route_add(
                 0x0,
@@ -1478,7 +1524,7 @@ port_l3_host_delete(struct ofproto *ofproto_, bool is_ipv6, char *ip_addr)
                 &ip_address.prefix_len);
     }
 
-    nhop_handle = switch_api_cpu_nhop_get(SWITCH_HOSTIF_REASON_CODE_GLEAN);
+    nhop_handle = l3_route_nhop_glean_get();
 
     status = switch_api_l3_route_delete(
                 0x0,
@@ -1726,12 +1772,6 @@ delete_l3_host_entry(const struct ofproto *ofproto_, void *aux,
     }
 
     return 0;
-}
-
-switch_handle_t
-l3_route_nhop_glean_get()
-{
-    return switch_api_cpu_nhop_get(SWITCH_HOSTIF_REASON_CODE_GLEAN);
 }
 
 /* Add nexthop into the route entry */
@@ -2417,7 +2457,11 @@ const struct ofproto_class ofproto_sim_provider_class = {
     NULL,                       /* may implement type_get_memory_usage */
     NULL,                       /* may implement flush */
     query_tables,
+
+#ifdef OVS_2_5
     set_table_version,
+#endif /* OVS_2_5 */
+
     port_alloc,
     port_construct,
     port_destruct,
@@ -2444,6 +2488,12 @@ const struct ofproto_class ofproto_sim_provider_class = {
     rule_dealloc,
     rule_get_stats,
     rule_execute,
+
+#ifndef OVS_2_5
+    NULL,
+    rule_modify_actions,
+#endif /* OVS_2_5 */
+
     set_frag_handling,
     packet_out,
     NULL,                       /* may implement set_netflow */
@@ -2453,6 +2503,8 @@ const struct ofproto_class ofproto_sim_provider_class = {
     NULL,                       /* may implement set_cfm */
     cfm_status_changed,
     NULL,                       /* may implement get_cfm_status */
+
+#ifdef OVS_2_5
     NULL,                       /* may implement set_lldp */
     NULL,                       /* may implement get_lldp_status */
     NULL,                       /* may implement set_aa */
@@ -2460,6 +2512,8 @@ const struct ofproto_class ofproto_sim_provider_class = {
     NULL,                       /* may implement aa_mapping_unset */
     NULL,                       /* may implement aa_vlan_get_queued */
     NULL,                       /* may implement aa_vlan_get_queue_size */
+#endif /* OVS_2_5 */
+
     NULL,                       /* may implement set_bfd */
     bfd_status_changed,
     NULL,                       /* may implement get_bfd_status */
