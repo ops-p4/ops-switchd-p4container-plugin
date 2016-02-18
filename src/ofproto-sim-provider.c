@@ -314,13 +314,11 @@ query_tables(struct ofproto *ofproto,
     return;
 }
 
-#ifdef OVS_2_5
 static void
 set_table_version(struct ofproto *ofproto_, cls_version_t version)
 {
     return;
 }
-#endif
 
 static struct ofport *
 port_alloc(void)
@@ -412,12 +410,40 @@ disable_port_in_iptables(const char *port_name)
 }
 
 static void
+p4_lag_port_update (switch_handle_t lag_handle,
+                    struct sim_provider_ofport *port, bool add)
+{
+    int32_t device = 0;
+    switch_handle_t port_handle;
+    switch_port_t port_id;
+    switch_status_t ret_val = 0;
+
+    netdev_get_device_port_handle(port->up.netdev, &device,
+                           &port_handle);
+    if (add) {
+        ret_val = switch_api_lag_member_add(0, lag_handle, SWITCH_API_DIRECTION_BOTH,
+                                    handle_to_id(port_handle));
+    } else {
+        ret_val = switch_api_lag_member_delete(0, lag_handle, SWITCH_API_DIRECTION_BOTH,
+                                    handle_to_id(port_handle));
+    }
+    if (ret_val) {
+        VLOG_ERR("bundle_add_port:lag_member_add failed for lag 0x%x port 0x%x",
+                    lag_handle, port_handle);
+    }
+}
+
+static void
 bundle_del_port(struct sim_provider_ofport *port)
 {
     struct ofbundle *bundle = port->bundle;
 
     list_remove(&port->bundle_node);
     port->bundle = NULL;
+
+    if (bundle && bundle->is_lag) {
+        p4_lag_port_update(bundle->port_lag_handle, port, false/*add*/);
+    }
 
     /* Enable the port in IP tables. So that regular L3 traffic can flow
      * across it. */
@@ -444,6 +470,10 @@ bundle_add_port(struct ofbundle *bundle, ofp_port_t ofp_port)
 
         port->bundle = bundle;
         list_push_back(&bundle->ports, &port->bundle_node);
+        // if lag is already create in h/w, add member port to it
+        if (bundle->is_lag) {
+            p4_lag_port_update(bundle->port_lag_handle, port, true/*add*/);
+        }
     }
 
     return true;
@@ -462,13 +492,14 @@ bundle_destroy(struct ofbundle *bundle)
         VLOG_INFO("XXX bundle not destroyed - TBD");
         return;
     }
-    p4_switch_interface_delete (bundle);
 
     LIST_FOR_EACH_SAFE(port, next_port, bundle_node, &bundle->ports) {
         bundle_del_port(port);
     }
 
     hmap_remove(&ofproto->bundles, &bundle->hmap_node);
+
+    p4_switch_interface_delete (bundle);
 
     if (bundle->name) {
         free(bundle->name);
@@ -501,7 +532,7 @@ vlan_mode_to_port_type(int32_t vlan_mode, int32_t *port_type, int32_t *tag_mode)
     return;
 }
 
-static void
+static int
 p4_switch_vlan_port_create (struct ofbundle *bundle, int32_t vlan)
 {
     struct ofp4vlan *p4vlan;
@@ -513,13 +544,15 @@ p4_switch_vlan_port_create (struct ofbundle *bundle, int32_t vlan)
 
         vlan_port.handle = bundle->if_handle;
         vlan_port.tagging_mode = bundle->tag_mode;
-        VLOG_INFO("switch_api_vlan_ports_add - vlan %d, hdl 0x%x, port hdl 0x%x",
+        VLOG_INFO("switch_api_vlan_ports_add - vlan %d, hdl 0x%x, if_hdl 0x%x",
                     p4vlan->vid, p4vlan->vlan_handle, vlan_port.handle);
         if (switch_api_vlan_ports_add(0, p4vlan->vlan_handle, 1, &vlan_port)) {
             VLOG_ERR("switch_api_vlan_ports_add - failed");
+            return -1;
         }
+        return 0;   // successfully added
     }
-    return;
+    return -1;
 }
 
 static void
@@ -556,13 +589,22 @@ p4_switch_interface_create (struct ofbundle *bundle)
     memset(&i_info, 0, sizeof(switch_api_interface_info_t));
 
     port = sim_provider_bundle_ofport_cast(list_front(&bundle->ports));
-
-    if (bundle->is_lag) {
-        /* XXX LAG not supported */
-        return;
-    }
     netdev_get_device_port_handle(port->up.netdev, &device,
                                     &bundle->port_lag_handle);
+
+    if (bundle->is_lag) {
+        bundle->port_lag_handle = switch_api_lag_create(device);
+        if (bundle->port_lag_handle == SWITCH_API_INVALID_HANDLE) {
+            VLOG_ERR("p4_switch_interface_create:lag_create() Failed");
+            return;
+        }
+        struct sim_provider_ofport *next_port = NULL, *port = NULL;
+
+        LIST_FOR_EACH_SAFE(port, next_port, bundle_node, &bundle->ports) {
+            p4_lag_port_update(bundle->port_lag_handle, port, true/*add*/);
+        }
+    }
+
     if (bundle->port_type == SWITCH_API_INTERFACE_L2_VLAN_ACCESS ||
         bundle->port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
         i_info.type = bundle->port_type;
@@ -625,10 +667,57 @@ p4_switch_interface_delete (struct ofbundle *bundle)
         VLOG_INFO("switch_api_interface_delete (L3) - if_handle 0x%x",
                     bundle->if_handle);
     }
+    // XXX LAG
+    // p4_lag_port_delete():
+    //  - lag_port_remove - for all ports
     switch_api_interface_delete(0, bundle->if_handle);
     bundle->if_handle = SWITCH_API_INVALID_HANDLE;
     return;
 }
+
+static void
+p4_switch_interface_port_to_lag (struct ofbundle *bundle)
+{
+    switch_handle_t port_if_handle, lag_if_handle;
+    int b;
+
+    VLOG_INFO("Convert bundle from single port to lag %s", bundle->name);
+    /* Make-before-break to avoid traffic interruption */
+    port_if_handle = bundle->if_handle;
+    bundle->if_handle = SWITCH_API_INVALID_HANDLE;
+    bundle->is_lag = true;
+    /* create lag, add members and new interface with lag */
+    p4_switch_interface_create(bundle);
+    lag_if_handle = bundle->if_handle;
+
+    /* add already configured vlans to the lag_bundle from bundle->trunks
+     * and remove them from port bundle
+     */
+    for (b=0; b<VLAN_BITMAP_SIZE; b++) {
+        if (bitmap_is_set(bundle->trunks, b)) {
+            struct ofp4vlan *p4vlan;
+            struct sim_provider_node *ofproto = bundle->ofproto;
+
+            // XXX: delete vlan port before add .. need to fix it in switchapi
+            // switch the if_handle to re-use the delete function
+            bundle->if_handle = port_if_handle;
+            p4_switch_vlan_port_delete(bundle, b);
+
+            p4vlan = p4vlan_lookup(ofproto, b);
+            bundle->if_handle = lag_if_handle;
+            if (p4vlan && bundle->port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
+                switch_api_interface_native_vlan_set(bundle->if_handle, p4vlan->vlan_handle);
+            }
+            p4_switch_vlan_port_create(bundle, b);
+        }
+    }
+    /* restore the if_handle */
+    bundle->if_handle = lag_if_handle;
+    /* delete port_if_handle */
+    switch_api_interface_delete(0, port_if_handle);
+}
+
+// XXX: lag_to_port : Transition from lag to port when n_slaves decrments to 1
 
 /* Bundles. */
 static int
@@ -646,20 +735,17 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     int32_t new_port_type = 0;
     int32_t tag_mode = 0;
 
+    bundle = bundle_lookup(ofproto, aux);
     if (s == NULL) {
         VLOG_INFO("bundle_set: settings==NULL => destroy");
-        bundle_destroy(bundle_lookup(ofproto, aux));
+        if (bundle) {
+            bundle_destroy(bundle_lookup(ofproto, aux));
+        }
         return 0;
     }
     VLOG_INFO("bundle_set: name %s, n_slaves %d, vlan_mode %d, vlan %d, AUX = 0x%p, trunks = %p",
                 s->name, s->n_slaves, s->vlan_mode, s->vlan, aux,
                 s->trunks);
-    /* XXX LAG is not supported */
-    if (s->n_slaves > 1) {
-        VLOG_ERR("LAG not supported");
-        return EINVAL;
-    }
-    bundle = bundle_lookup(ofproto, aux);
     if (!bundle) {
         VLOG_INFO("bundle_set: New bundle name %s, aux 0x%p", s->name, aux);
         bundle = xmalloc(sizeof (struct ofbundle));
@@ -721,25 +807,12 @@ found:     ;
 
     if (list_is_empty(&bundle->ports)) {
         bundle_destroy(bundle);
-        return EINVAL;
+        return 0;
     }
 
     VLOG_INFO("Bridge/VRF name=%s type=%s bundle=%s",
              ofproto->up.name, ofproto->up.type, bundle->name);
 
-    if (s->n_slaves == 1) {
-
-        struct sim_provider_ofport *port = NULL;
-        const char *type = NULL;
-
-        port =
-            sim_provider_ofport_cast(ofproto_get_port(ofproto_, s->slaves[0]));
-        if (port) {
-            type = netdev_get_type(port->up.netdev);
-        }
-    }
-
-    /* If it is bridge's internal bundle return from here. */
     if(strcmp(bundle->name, "bridge_normal") == 0) {
         /* Setup system_Acl for the bridge
          * switchapi supports creating system_acls to redirect
@@ -768,6 +841,28 @@ found:     ;
 
         return 0;
     }
+    /* Check if we have more than 1 member to create LAG in the hardware
+     * h/w LAG resources are not consumed until we have >1 members (slaves)
+     * Once LAG is created in the h/w it is not removed when mebers drop to 1
+     * XXX this optimization will be done later if required
+     */
+    if (!bundle->is_lag && s->n_slaves > 1) {
+        p4_switch_interface_port_to_lag(bundle);
+    }
+    if (!bundle->is_lag && s->n_slaves == 1) {
+        // XXX check single port swap case - need to delete and recreate
+        // P4 interface with new port handle
+
+        struct sim_provider_ofport *port = NULL;
+        const char *type = NULL;
+
+        port =
+            sim_provider_ofport_cast(ofproto_get_port(ofproto_, s->slaves[0]));
+        if (port) {
+            type = netdev_get_type(port->up.netdev);
+        }
+    }
+
 
     /* Need to check the old and new bundle parmeters to handle transitions
      * Old          :   New
@@ -860,11 +955,13 @@ found:     ;
                     bitmap_set0(bundle->trunks, b);
                 }
                 if (vlan_new) {
+                    int vlan_add_err = 0;
                     // Try to add new vlan if it is created via set_vlan()
                     // if not, remember it for future addition
-                    p4_switch_vlan_port_create(bundle, b);
-                    if (s->trunks) {
+                    vlan_add_err = p4_switch_vlan_port_create(bundle, b);
+                    if (!vlan_add_err || s->trunks) {
                         // add to bit map if it was specified by the user
+                        // or was added successfully
                         bitmap_set1(bundle->trunks, b);
                     }
                 }
@@ -906,10 +1003,12 @@ bundle_remove(struct ofport *port_)
                     netdev_get_name(port_->netdev));
         bundle_del_port(port);
 
+#if 0 // XXX: don't do it here - may run into this if single member is swapped with another
         /* If there are no ports left, delete the bunble. */
         if (list_is_empty(&bundle->ports)) {
             bundle_destroy(bundle);
         }
+#endif
     }
 }
 
@@ -1092,6 +1191,10 @@ port_del(struct ofproto *ofproto_, ofp_port_t ofp_port)
     struct sim_provider_ofport *ofport = get_ofp_port(ofproto, ofp_port);
     char *netdev_name = NULL;
 
+    if (ofport == NULL) {
+        VLOG_ERR("port_del - 0x%x invalid port", ofp_port);
+        return 0;
+    }
     ovs_assert(ofport);
     netdev_name = netdev_get_name(ofport->up.netdev);
     VLOG_DBG("port_del: %d, name = %s", ofp_port, netdev_name);
@@ -1235,23 +1338,12 @@ rule_construct(struct rule *rule_ OVS_UNUSED)
     return 0;
 }
 
-#ifdef OVS_2_5
 static void rule_insert(struct rule *rule, struct rule *old_rule,
                     bool forward_stats)
 OVS_REQUIRES(ofproto_mutex)
 {
     return;
 }
-
-#else
-static enum ofperr
-rule_insert(struct rule *rule_ OVS_UNUSED)
-OVS_REQUIRES(ofproto_mutex)
-{
-    return 0;
-}
-
-#endif
 
 static void
 rule_delete(struct rule *rule_ OVS_UNUSED)
@@ -1273,23 +1365,12 @@ rule_get_stats(struct rule *rule_ OVS_UNUSED, uint64_t * packets OVS_UNUSED,
     return;
 }
 
-#ifdef OVS_2_5
 static enum ofperr
 rule_execute(struct rule *rule OVS_UNUSED, const struct flow *flow OVS_UNUSED,
              struct dp_packet *packet OVS_UNUSED)
 {
     return 0;
 }
-
-#else
-
-static enum ofperr
-rule_execute(struct rule *rule OVS_UNUSED, const struct flow *flow OVS_UNUSED,
-             struct ofpbuf *packet OVS_UNUSED)
-{
-    return 0;
-}
-#endif
 
 static void
 rule_modify_actions(struct rule *rule_ OVS_UNUSED,
@@ -1362,8 +1443,6 @@ set_frag_handling(struct ofproto *ofproto_ OVS_UNUSED,
     return false;
 }
 
-#ifdef OVS_2_5
-
 static enum ofperr
 packet_out(struct ofproto *ofproto_ OVS_UNUSED,
            struct ofpbuf *packet OVS_UNUSED,
@@ -1373,20 +1452,6 @@ packet_out(struct ofproto *ofproto_ OVS_UNUSED,
 {
     return 0;
 }
-
-#else
-
-static enum ofperr
-packet_out(struct ofproto *ofproto_ OVS_UNUSED,
-           struct dp_packet *packet OVS_UNUSED,
-           const struct flow *flow OVS_UNUSED,
-           const struct ofpact *ofpacts OVS_UNUSED,
-           size_t ofpacts_len OVS_UNUSED)
-{
-    return 0;
-}
-
-#endif  /* OVS_2_5 */
 
 static void
 get_netflow_ids(const struct ofproto *ofproto_ OVS_UNUSED,
@@ -2458,9 +2523,7 @@ const struct ofproto_class ofproto_sim_provider_class = {
     NULL,                       /* may implement flush */
     query_tables,
 
-#ifdef OVS_2_5
     set_table_version,
-#endif /* OVS_2_5 */
 
     port_alloc,
     port_construct,
@@ -2489,11 +2552,6 @@ const struct ofproto_class ofproto_sim_provider_class = {
     rule_get_stats,
     rule_execute,
 
-#ifndef OVS_2_5
-    NULL,
-    rule_modify_actions,
-#endif /* OVS_2_5 */
-
     set_frag_handling,
     packet_out,
     NULL,                       /* may implement set_netflow */
@@ -2504,7 +2562,6 @@ const struct ofproto_class ofproto_sim_provider_class = {
     cfm_status_changed,
     NULL,                       /* may implement get_cfm_status */
 
-#ifdef OVS_2_5
     NULL,                       /* may implement set_lldp */
     NULL,                       /* may implement get_lldp_status */
     NULL,                       /* may implement set_aa */
@@ -2512,7 +2569,6 @@ const struct ofproto_class ofproto_sim_provider_class = {
     NULL,                       /* may implement aa_mapping_unset */
     NULL,                       /* may implement aa_vlan_get_queued */
     NULL,                       /* may implement aa_vlan_get_queue_size */
-#endif /* OVS_2_5 */
 
     NULL,                       /* may implement set_bfd */
     bfd_status_changed,
