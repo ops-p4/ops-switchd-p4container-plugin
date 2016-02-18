@@ -356,8 +356,16 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
         netdev->pause_tx = false;
         netdev->pause_rx = false;
 
-        switch_api_hostif_delete(0, netdev->hostif_handle);
-        netdev->hostif_handle = SWITCH_API_INVALID_HANDLE;
+        if (netdev->hostif_handle != SWITCH_API_INVALID_HANDLE) {
+            if (switch_api_hostif_delete(0, netdev->hostif_handle)) {
+                VLOG_ERR("switch_api_hostif_delete handle 0x%x - Failed",
+                            netdev->hostif_handle);
+            }
+            else {
+                VLOG_INFO("switch_api_hostif_delete handle 0x%x", netdev->hostif_handle);
+                netdev->hostif_handle = SWITCH_API_INVALID_HANDLE;
+            }
+        }
     }
     sprintf(cmd, "%s /sbin/ip link set dev %s %s",
                 SWNS_EXEC, netdev->linux_intf_name, hw_enable ? "up" : "down");

@@ -420,6 +420,8 @@ p4_lag_port_update (switch_handle_t lag_handle,
 
     netdev_get_device_port_handle(port->up.netdev, &device,
                            &port_handle);
+    VLOG_INFO("p4_lag_port_update: lag 0x%x port 0x%x add %d",
+                    lag_handle, port_handle, add);
     if (add) {
         ret_val = switch_api_lag_member_add(0, lag_handle, SWITCH_API_DIRECTION_BOTH,
                                     handle_to_id(port_handle));
@@ -428,8 +430,8 @@ p4_lag_port_update (switch_handle_t lag_handle,
                                     handle_to_id(port_handle));
     }
     if (ret_val) {
-        VLOG_ERR("bundle_add_port:lag_member_add failed for lag 0x%x port 0x%x",
-                    lag_handle, port_handle);
+        VLOG_ERR("p4_lag_port_update failed for lag 0x%x port 0x%x add %d",
+                    lag_handle, port_handle, add);
     }
 }
 
@@ -806,7 +808,6 @@ found:     ;
     ovs_assert(list_size(&bundle->ports) <= s->n_slaves);
 
     if (list_is_empty(&bundle->ports)) {
-        bundle_destroy(bundle);
         return 0;
     }
 
@@ -852,15 +853,6 @@ found:     ;
     if (!bundle->is_lag && s->n_slaves == 1) {
         // XXX check single port swap case - need to delete and recreate
         // P4 interface with new port handle
-
-        struct sim_provider_ofport *port = NULL;
-        const char *type = NULL;
-
-        port =
-            sim_provider_ofport_cast(ofproto_get_port(ofproto_, s->slaves[0]));
-        if (port) {
-            type = netdev_get_type(port->up.netdev);
-        }
     }
 
 
