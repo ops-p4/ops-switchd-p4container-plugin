@@ -238,6 +238,16 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
             if (system(cmd) != 0) {
                 VLOG_ERR("NETDEV-SIM | system command failure cmd=%s", cmd);
             }
+#if 1
+            if (netdev->hostif_handle == SWITCH_API_INVALID_HANDLE) {
+                switch_hostif_t     hostif;
+                memset(&hostif, 0, sizeof(hostif));
+                hostif.handle = netdev->port_handle;
+                strncpy(hostif.intf_name, netdev->linux_intf_name, sizeof(hostif.intf_name));
+                netdev->hostif_handle = switch_api_hostif_create(0, &hostif);
+                VLOG_INFO("switch_api_hostif_create handle 0x%x", netdev->hostif_handle);
+            }
+#endif
         } else {
             VLOG_ERR("No hw_id available");
             ovs_mutex_unlock(&netdev->mutex);
@@ -339,7 +349,7 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
         netdev->autoneg = autoneg;
         if(pause)
             get_interface_pause_config(pause, &(netdev->pause_rx), &(netdev->pause_tx));
-
+#if 0
         if (netdev->hostif_handle == SWITCH_API_INVALID_HANDLE) {
             memset(&hostif, 0, sizeof(hostif));
             hostif.handle = netdev->port_handle;
@@ -347,6 +357,7 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
             netdev->hostif_handle = switch_api_hostif_create(0, &hostif);
             VLOG_INFO("switch_api_hostif_create handle 0x%x", netdev->hostif_handle);
         }
+#endif
     } else {
         netdev->flags &= ~NETDEV_UP;
         netdev->link_state = 0;
@@ -356,6 +367,7 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
         netdev->pause_tx = false;
         netdev->pause_rx = false;
 
+#if 0
         if (netdev->hostif_handle != SWITCH_API_INVALID_HANDLE) {
             if (switch_api_hostif_delete(0, netdev->hostif_handle)) {
                 VLOG_ERR("switch_api_hostif_delete handle 0x%x - Failed",
@@ -366,6 +378,7 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
                 netdev->hostif_handle = SWITCH_API_INVALID_HANDLE;
             }
         }
+#endif
     }
     sprintf(cmd, "%s /sbin/ip link set dev %s %s",
                 SWNS_EXEC, netdev->linux_intf_name, hw_enable ? "up" : "down");
