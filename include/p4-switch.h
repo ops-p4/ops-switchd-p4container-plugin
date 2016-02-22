@@ -34,6 +34,37 @@
 
 #define MAX_P4_SWITCH_PORTS 64
 
+// These are netdev stats... there are problems including netdev.h and netlink.h
+// ovs/netlink.h(included via netdev.h) and linux/netlink.h have duplicate definitions
+struct p4_port_stats {
+    uint64_t rx_packets;        /* Total packets received. */
+    uint64_t tx_packets;        /* Total packets transmitted. */
+    uint64_t rx_bytes;          /* Total bytes received. */
+    uint64_t tx_bytes;          /* Total bytes transmitted. */
+    uint64_t rx_errors;         /* Bad packets received. */
+    uint64_t tx_errors;         /* Packet transmit problems. */
+    uint64_t rx_dropped;        /* No buffer space. */
+    uint64_t tx_dropped;        /* No buffer space. */
+    uint64_t multicast;         /* Multicast packets received. */
+    uint64_t collisions;
+
+    /* Detailed receive errors. */
+    uint64_t rx_length_errors;
+    uint64_t rx_over_errors;    /* Receiver ring buff overflow. */
+    uint64_t rx_crc_errors;     /* Recved pkt with crc error. */
+    uint64_t rx_frame_errors;   /* Recv'd frame alignment error. */
+    uint64_t rx_fifo_errors;    /* Recv'r fifo overrun . */
+    uint64_t rx_missed_errors;  /* Receiver missed packet. */
+
+    /* Detailed transmit errors. */
+    uint64_t tx_aborted_errors;
+    uint64_t tx_carrier_errors;
+    uint64_t tx_fifo_errors;
+    uint64_t tx_heartbeat_errors;
+    uint64_t tx_window_errors;
+};
+
 void p4_switch_init(void);
+int p4_port_stats_get (const char *if_name, struct p4_port_stats *stats);
 
 #endif /* _P4_SWITCH_H_ */

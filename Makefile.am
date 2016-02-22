@@ -6,7 +6,8 @@ prog_CFLAGS = $(AM_CFLAGS)
 
 PFX ?=
 
-OVSCOMMON_INCLUDE_DIRS = $(PFX)/$(includedir)/ovs
+OVSCOMMON_INCLUDE_DIRS = -I $(PFX)/$(includedir)
+OVSCOMMON_INCLUDE_DIRS += -I $(PFX)/$(includedir)/ovs
 OVSCOMMON_LIB = $(PFX)/$(libdir)/libovscommon.la
 
 p4_plugin_files = \
@@ -18,7 +19,7 @@ src/sim-plugins.c
 noinst_LTLIBRARIES = libovs_p4_sim_plugin_interface.la
 libovs_p4_sim_plugin_interface_la_SOURCES = $(p4_plugin_files)
 libovs_p4_sim_plugin_interface_la_CFLAGS = -I $(srcdir)/include
-libovs_p4_sim_plugin_interface_la_CFLAGS += -I ${OVSCOMMON_INCLUDE_DIRS}
+libovs_p4_sim_plugin_interface_la_CFLAGS += ${OVSCOMMON_INCLUDE_DIRS}
 libovs_p4_sim_plugin_interface_la_CFLAGS += -I $(srcdir)/switch/switchapi/inc
 libovs_p4_sim_plugin_interface_la_CFLAGS += -I $(srcdir)/switch/switchapi/third-party/tommyds/include
 libovs_p4_sim_plugin_interface_la_CFLAGS += -I $(srcdir)/switch/p4src/includes

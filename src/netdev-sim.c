@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
  * Copyright (C) 2015 Hewlett-Packard Development Company, L.P.
- * XXX Add BFN (C) 2016 here ???
+ * Copyright (C) 2016 Barefoot Networks Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -430,11 +430,28 @@ netdev_sim_get_etheraddr(const struct netdev *netdev,
 }
 
 static int
-netdev_sim_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
+netdev_sim_internal_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
     struct netdev_sim *dev = netdev_sim_cast(netdev);
 
     ovs_mutex_lock(&dev->mutex);
+    *stats = dev->stats;
+    ovs_mutex_unlock(&dev->mutex);
+
+    return 0;
+}
+
+static int
+netdev_sim_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
+{
+    struct netdev_sim *dev = netdev_sim_cast(netdev);
+    int rc = 0;
+    struct p4_port_stats port_stats;
+
+    memset(&port_stats, 0, sizeof(port_stats));
+    ovs_mutex_lock(&dev->mutex);
+    rc = p4_port_stats_get(dev->linux_intf_name, &port_stats);
+    dev->stats = *((struct netdev_stats *)&port_stats);    // HACK
     *stats = dev->stats;
     ovs_mutex_unlock(&dev->mutex);
 
@@ -642,7 +659,7 @@ static const struct netdev_class sim_internal_class = {
     netdev_sim_get_carrier,
     NULL,                       /* get_carrier_resets */
     NULL,                       /* get_miimon */
-    netdev_sim_get_stats,
+    netdev_sim_internal_get_stats,
 
     netdev_sim_get_features,    /* get_features */
     NULL,                       /* set_advertisements */
