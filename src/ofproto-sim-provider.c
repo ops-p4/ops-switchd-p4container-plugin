@@ -1201,42 +1201,11 @@ static int
 port_get_stats(const struct ofport *ofport_, struct netdev_stats *stats)
 {
     struct sim_provider_ofport *ofport = sim_provider_ofport_cast(ofport_);
-    int error;
+    int error = 0;
 
     VLOG_INFO("port_get_stats for %s", netdev_get_name(ofport->up.netdev));
 
-    error = netdev_get_stats(ofport->up.netdev, stats);
-
-    if (!error && ofport_->ofp_port == OFPP_LOCAL) {
-        struct sim_provider_node *ofproto =
-            sim_provider_node_cast(ofport->up.ofproto);
-
-        ovs_mutex_lock(&ofproto->stats_mutex);
-        /* ofproto->stats.tx_packets represents packets that we created
-         * internally and sent to some port Account for them as if they had
-         * come from OFPP_LOCAL and got forwarded. */
-
-        if (stats->rx_packets != UINT64_MAX) {
-            stats->rx_packets += ofproto->stats.tx_packets;
-        }
-
-        if (stats->rx_bytes != UINT64_MAX) {
-            stats->rx_bytes += ofproto->stats.tx_bytes;
-        }
-
-        /* ofproto->stats.rx_packets represents packets that were received on
-         * some port and we processed internally and dropped (e.g. STP).
-         * Account for them as if they had been forwarded to OFPP_LOCAL. */
-
-        if (stats->tx_packets != UINT64_MAX) {
-            stats->tx_packets += ofproto->stats.rx_packets;
-        }
-
-        if (stats->tx_bytes != UINT64_MAX) {
-            stats->tx_bytes += ofproto->stats.rx_bytes;
-        }
-        ovs_mutex_unlock(&ofproto->stats_mutex);
-    }
+    /* XXX Currently this function is not being called by switchd - Add it when needed */
 
     return error;
 }
