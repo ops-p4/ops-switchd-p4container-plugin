@@ -1203,6 +1203,8 @@ port_get_stats(const struct ofport *ofport_, struct netdev_stats *stats)
     struct sim_provider_ofport *ofport = sim_provider_ofport_cast(ofport_);
     int error;
 
+    VLOG_INFO("port_get_stats for %s", netdev_get_name(ofport->up.netdev));
+
     error = netdev_get_stats(ofport->up.netdev, stats);
 
     if (!error && ofport_->ofp_port == OFPP_LOCAL) {

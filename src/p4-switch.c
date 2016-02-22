@@ -151,7 +151,7 @@ netdev_parse_netlink_msg(struct nlmsghdr *h, struct p4_port_stats *stats)
 
 /* API to get port stats */
 int
-p4_get_port_stats (const char *if_name, struct p4_port_stats *stats)
+p4_port_stats_get (const char *if_name, struct p4_port_stats *stats)
 {
     struct {
         struct nlmsghdr hdr;
