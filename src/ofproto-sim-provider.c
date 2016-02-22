@@ -189,6 +189,21 @@ ofproto_install_l3_acl() /* XXX - change name to p4_install_system_arp_acl ?? */
         VLOG_INFO("failed to create acl for arp request");
     }
 
+    api_rcode_info.reason_code = SWITCH_HOSTIF_REASON_CODE_OSPF;
+    status = switch_api_hostif_reason_code_create(
+                             0x0,
+                             &api_rcode_info);
+    if (status != SWITCH_STATUS_SUCCESS) {
+        VLOG_INFO("failed to create acl for arp request");
+    }
+
+    api_rcode_info.reason_code = SWITCH_HOSTIF_REASON_CODE_OSPFV6;
+    status = switch_api_hostif_reason_code_create(
+                             0x0,
+                             &api_rcode_info);
+    if (status != SWITCH_STATUS_SUCCESS) {
+        VLOG_INFO("failed to create acl for arp request");
+    }
     return 0;
 }
 
@@ -1573,12 +1588,14 @@ port_l3_host_delete(struct ofproto *ofproto_, bool is_ipv6, char *ip_addr)
                 ip_addr,
                 &ip_address.ip.v4addr,
                 &ip_address.prefix_len);
+        ip_address.prefix_len = 32;
     } else {
         ip_string_to_prefix(
                 is_ipv6,
                 ip_addr,
                 &ip_address.ip.v6addr,
                 &ip_address.prefix_len);
+        ip_address.prefix_len = 128;
     }
 
     nhop_handle = l3_route_nhop_glean_get();
@@ -1697,6 +1714,13 @@ add_l3_host_entry(const struct ofproto *ofproto_, void *aux,
 
     VLOG_INFO("received add_l3_host_entry");
 
+    mac_addr = ether_aton(next_hop_mac_addr);
+
+    if (!mac_addr || !next_hop_mac_addr) {
+        VLOG_ERR("add_l3_host_entry failed: invalid mac address");
+        return EINVAL;
+    }
+
     bundle = bundle_lookup(ofproto, aux);
     if (bundle == NULL) {
         VLOG_ERR("Failed to get port bundle/l3_intf not configured");
@@ -1732,7 +1756,6 @@ add_l3_host_entry(const struct ofproto *ofproto_, void *aux,
     api_neighbor.interface = bundle->if_handle;
     api_neighbor.nhop_handle = nhop_handle;
     memcpy(&api_neighbor.ip_addr, &ip_addr, sizeof(switch_ip_addr_t));
-    mac_addr = ether_aton(next_hop_mac_addr);
     memcpy(&api_neighbor.mac_addr.mac_addr, mac_addr, ETH_ALEN);
 
     neigh_handle = switch_api_neighbor_entry_add(0x0, &api_neighbor);
