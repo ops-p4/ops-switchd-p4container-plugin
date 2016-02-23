@@ -34,7 +34,6 @@
 #include "openvswitch/vlog.h"
 #include "ofproto-sim-provider.h"
 #include "vswitch-idl.h"
-#include "ops-routing.h"
 
 #include "netdev-sim.h"
 #include <netinet/ether.h>
@@ -45,13 +44,13 @@ VLOG_DEFINE_THIS_MODULE(P4_ofproto_provider_sim);
 #define MAX_CMD_LEN             2048
 #define SWNS_EXEC               "/sbin/ip netns exec swns"
 
-#define VLAN_BITMAP_SIZE        4096 /* XXX find if this is defined somewhere */
+#define VLAN_BITMAP_SIZE        4096
 #define P4_HANDLE_IS_VALID(_h)  ((_h) != SWITCH_API_INVALID_HANDLE)
 
 static void p4_switch_vlan_port_delete (struct ofbundle *bundle, int32_t vlan);
 static void p4_switch_interface_delete (struct ofbundle *bundle);
 
-struct hmap l3_route_table;
+static struct hmap l3_route_table;
 
 static int
 port_ip_reconfigure(struct ofproto *ofproto, struct ofbundle *bundle,
@@ -70,7 +69,6 @@ sim_provider_bundle_ofport_cast(const struct ovs_list *lnode)
     return lnode ?
         CONTAINER_OF(lnode, struct sim_provider_ofport, bundle_node) : NULL;
 }
-
 
 static inline struct sim_provider_node *
 sim_provider_node_cast(const struct ofproto *ofproto)
@@ -107,16 +105,11 @@ enumerate_names(const char *type, struct sset *names)
     struct sim_provider_node *ofproto;
     const char *port_type;
 
-    /* XXX documentation says caller has already cleared the names..
-     * should not do it here ?
-     * update name for types supported ("system" and "vrf")
-     */
     sset_clear(names);
     HMAP_FOR_EACH(ofproto, all_sim_provider_node, &all_sim_provider_nodes) {
         if (strcmp(type, ofproto->up.type)) {
             continue;
         }
-
         sset_add(names, ofproto->up.name);
     }
 
@@ -132,9 +125,6 @@ del(const char *type OVS_UNUSED, const char *name OVS_UNUSED)
 static const char *
 port_open_type(const char *datapath_type OVS_UNUSED, const char *port_type)
 {
-    /* XXX: comments indicate that for userspace DP (such as bmv2) type could be
-     * reported as "tap"
-     */
     if (port_type && (strcmp(port_type, OVSREC_INTERFACE_TYPE_INTERNAL) == 0)) {
         return port_type;
     }
@@ -160,12 +150,10 @@ dealloc(struct ofproto *ofproto_)
 }
 
 static int
-ofproto_install_l3_acl() /* XXX - change name to p4_install_system_arp_acl ?? */
+p4_ofproto_install_l3_acl()
 {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     switch_api_hostif_rcode_info_t api_rcode_info;
-
-    VLOG_INFO("installing system acl");
 
     memset(&api_rcode_info, 0x0, sizeof(switch_api_hostif_rcode_info_t));
 
@@ -178,7 +166,7 @@ ofproto_install_l3_acl() /* XXX - change name to p4_install_system_arp_acl ?? */
                              0x0,
                              &api_rcode_info);
     if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_INFO("failed to create acl for arp request");
+        VLOG_ERR("failed to create acl for arp request");
     }
 
     api_rcode_info.reason_code = SWITCH_HOSTIF_REASON_CODE_ARP_RESPONSE;
@@ -186,7 +174,7 @@ ofproto_install_l3_acl() /* XXX - change name to p4_install_system_arp_acl ?? */
                              0x0,
                              &api_rcode_info);
     if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_INFO("failed to create acl for arp request");
+        VLOG_ERR("failed to create acl for arp response");
     }
 
     api_rcode_info.reason_code = SWITCH_HOSTIF_REASON_CODE_OSPF;
@@ -194,7 +182,7 @@ ofproto_install_l3_acl() /* XXX - change name to p4_install_system_arp_acl ?? */
                              0x0,
                              &api_rcode_info);
     if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_INFO("failed to create acl for arp request");
+        VLOG_ERR("failed to create acl for ospf");
     }
 
     api_rcode_info.reason_code = SWITCH_HOSTIF_REASON_CODE_OSPFV6;
@@ -202,8 +190,15 @@ ofproto_install_l3_acl() /* XXX - change name to p4_install_system_arp_acl ?? */
                              0x0,
                              &api_rcode_info);
     if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_INFO("failed to create acl for arp request");
+        VLOG_ERR("failed to create acl for ospfv6");
     }
+    return 0;
+}
+
+static int
+p4_ofproto_uninstall_l3_acl()
+{
+    /* TODO */
     return 0;
 }
 
@@ -212,9 +207,8 @@ construct(struct ofproto *ofproto_)
 {
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
     struct shash_node *node, *next;
-    int error = 0;
 
-    VLOG_INFO("P4:Ofproto->construct - name %s type %s",
+    VLOG_DBG("Ofproto->construct - name %s type %s",
                 ofproto->up.name, ofproto->up.type);
 
     ofproto->vrf = false;
@@ -254,34 +248,13 @@ construct(struct ofproto *ofproto_)
         ofproto->vrf = true;
         VLOG_DBG("VRF name %s\n", ofproto_->name);
         ofproto->vrf_handle = switch_api_vrf_create(0, 1);
-        switch_mac_addr_t mac;
-        switch_status_t status = SWITCH_STATUS_SUCCESS;
-        // XXX get rmac from interface ?? on first interface added to a VRF ??
-        mac.mac_addr[0] = 0x00;
-        mac.mac_addr[1] = 0x77;
-        mac.mac_addr[2] = 0x66;
-        mac.mac_addr[3] = 0x55;
-        mac.mac_addr[4] = 0x44;
-        mac.mac_addr[5] = 0x33;
-        ofproto->rmac_handle = switch_api_router_mac_group_create(0x0);
-        status = switch_api_router_mac_add(
-                             0x0,
-                             ofproto->rmac_handle,
-                             &mac);
-        if (status != SWITCH_STATUS_SUCCESS) {
-            VLOG_INFO("rmac add failed");
-        } else {
-            VLOG_INFO("vrf_handle %lx rmac_handle %lx",
-                       ofproto->vrf_handle,
-                       ofproto->rmac_handle);
-        }
-        ofproto_install_l3_acl();
+        p4_ofproto_install_l3_acl();
         hmap_init(&l3_route_table);
     }
 
     ofproto_init_max_ports(ofproto_, MAX_P4_SWITCH_PORTS);
 
-    return error;
+    return 0;
 }
 
 static void
@@ -357,7 +330,6 @@ port_construct(struct ofport *port_)
     struct sim_provider_ofport *port = sim_provider_ofport_cast(port_);
 
     /* XXX clean-up the provider_ofport structure - add the info as needed */
-    VLOG_INFO("port_construct");
     return 0;
 }
 
@@ -370,7 +342,6 @@ port_destruct(struct ofport *port_ OVS_UNUSED)
 static void
 port_reconfigured(struct ofport *port_, enum ofputil_port_config old_config)
 {
-    /* XXX old_config is a bitmap (set of flags like down, no_rx....) */
     return;
 }
 
@@ -404,7 +375,6 @@ static struct ofp4vlan *
 p4vlan_lookup(const struct sim_provider_node *ofproto, uint32_t vid)
 {
     struct ofp4vlan *p4vlan;
-    /* XXX: what is basis - initial value? use -1 */
     HMAP_FOR_EACH_IN_BUCKET(p4vlan, hmap_node, hash_int(vid, 0),
                             &ofproto->vlans) {
         if (p4vlan->vid == vid) {
@@ -461,13 +431,6 @@ bundle_del_port(struct sim_provider_ofport *port)
     if (bundle && bundle->is_lag) {
         p4_lag_port_update(bundle->port_lag_handle, port, false/*add*/);
     }
-
-    /* Enable the port in IP tables. So that regular L3 traffic can flow
-     * across it. */
-    if (port->iptable_rules_added == true) {
-        enable_port_in_iptables(netdev_get_name(port->up.netdev));
-        port->iptable_rules_added = false;
-    }
 }
 
 static bool
@@ -487,7 +450,7 @@ bundle_add_port(struct ofbundle *bundle, ofp_port_t ofp_port)
 
         port->bundle = bundle;
         list_push_back(&bundle->ports, &port->bundle_node);
-        // if lag is already create in h/w, add member port to it
+        /* if lag is already create in h/w, add member port to it */
         if (bundle->is_lag) {
             p4_lag_port_update(bundle->port_lag_handle, port, true/*add*/);
         }
@@ -504,9 +467,8 @@ bundle_destroy(struct ofbundle *bundle)
     struct ofp4vlan *p4vlan;
     struct sim_provider_ofport *port = NULL, *next_port = NULL;
 
-    VLOG_INFO("bundle_destroy %s", bundle->name);
+    VLOG_DBG("bundle_destroy %s", bundle->name);
     if (bundle->is_bridge_bundle) {
-        VLOG_INFO("XXX bundle not destroyed - TBD");
         return;
     }
 
@@ -516,7 +478,7 @@ bundle_destroy(struct ofbundle *bundle)
 
     hmap_remove(&ofproto->bundles, &bundle->hmap_node);
 
-    p4_switch_interface_delete (bundle);
+    p4_switch_interface_delete(bundle);
 
     if (bundle->name) {
         free(bundle->name);
@@ -567,7 +529,7 @@ p4_switch_vlan_port_create (struct ofbundle *bundle, int32_t vlan)
             VLOG_ERR("switch_api_vlan_ports_add - failed");
             return -1;
         }
-        return 0;   // successfully added
+        return 0;
     }
     return -1;
 }
@@ -601,7 +563,6 @@ p4_switch_interface_create (struct ofbundle *bundle)
     struct sim_provider_node *ofproto = bundle->ofproto;
     int32_t device = 0;
 
-    /* XXX use if_handle valid function from switchapi if available */
     ovs_assert(!P4_HANDLE_IS_VALID(bundle->if_handle));
     memset(&i_info, 0, sizeof(switch_api_interface_info_t));
 
@@ -632,13 +593,9 @@ p4_switch_interface_create (struct ofbundle *bundle)
         i_info.ipv6_unicast_enabled = TRUE;
         i_info.u.port_lag_handle = bundle->port_lag_handle;
         i_info.vrf_handle = ofproto->vrf_handle;
-        VLOG_INFO("creating l3 interface for port %lx", bundle->port_lag_handle);
         netdev_get_port_rmac_handle(port->up.netdev, &i_info.rmac_handle);
-        VLOG_INFO("creating l3 interface on %lx with rmac %lx",
-                   bundle->port_lag_handle,
-                   ofproto->rmac_handle);
     } else {
-        ovs_assert(true);
+        ovs_assert(0);
     }
 
     VLOG_INFO("switch_api_interface_create - type %d, port_handle 0x%x",
@@ -656,11 +613,10 @@ static void
 p4_switch_interface_delete (struct ofbundle *bundle)
 {
     if (!P4_HANDLE_IS_VALID(bundle->if_handle)) {
-        /* No interface is created in P4 so far */
         return;
     }
     if (bundle->port_type == SWITCH_API_INTERFACE_L2_VLAN_ACCESS) {
-        VLOG_INFO("switch_api_interface_delete(access) - if_handle 0x%x",
+        VLOG_DBG("switch_api_interface_delete(access) - if_handle 0x%x",
                     bundle->if_handle);
         if (bundle->vlan != -1) {
             /* delete native/default vlan */
@@ -673,20 +629,18 @@ p4_switch_interface_delete (struct ofbundle *bundle)
             /* Delete pv mappings for all trunk vlans */
             for (b=0; b<VLAN_BITMAP_SIZE; b++) {
                 if (bundle->trunks && bitmap_is_set(bundle->trunks, b)) {
-                    VLOG_INFO("delete trunk vlan %d", b);
+                    VLOG_DBG("delete trunk vlan %d", b);
                     p4_switch_vlan_port_delete(bundle, b);
                 }
             }
         }
-        VLOG_INFO("switch_api_interface_delete (trunk) - if_handle 0x%x",
+        VLOG_DBG("switch_api_interface_delete (trunk) - if_handle 0x%x",
                     bundle->if_handle);
     } else {
-        VLOG_INFO("switch_api_interface_delete (L3) - if_handle 0x%x",
+        VLOG_DBG("switch_api_interface_delete (L3) - if_handle 0x%x",
                     bundle->if_handle);
     }
-    // XXX LAG
-    // p4_lag_port_delete():
-    //  - lag_port_remove - for all ports
+
     switch_api_interface_delete(0, bundle->if_handle);
     bundle->if_handle = SWITCH_API_INVALID_HANDLE;
     return;
@@ -699,7 +653,7 @@ p4_switch_interface_port_to_lag (struct ofbundle *bundle)
     int b;
 
     VLOG_INFO("Convert bundle from single port to lag %s", bundle->name);
-    /* Make-before-break to avoid traffic interruption */
+    /* XXX: Make-before-break to avoid traffic interruption */
     port_if_handle = bundle->if_handle;
     bundle->if_handle = SWITCH_API_INVALID_HANDLE;
     bundle->is_lag = true;
@@ -715,12 +669,13 @@ p4_switch_interface_port_to_lag (struct ofbundle *bundle)
             struct ofp4vlan *p4vlan;
             struct sim_provider_node *ofproto = bundle->ofproto;
 
-            // XXX: delete vlan port before add .. need to fix it in switchapi
-            // switch the if_handle to re-use the delete function
+            /* XXX: delete vlan port before add .. need to fix it in switchapi */
             bundle->if_handle = port_if_handle;
             p4_switch_vlan_port_delete(bundle, b);
 
             p4vlan = p4vlan_lookup(ofproto, b);
+
+            /* switch the if_handle to re-use in create function */
             bundle->if_handle = lag_if_handle;
             if (p4vlan && bundle->port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
                 switch_api_interface_native_vlan_set(bundle->if_handle, p4vlan->vlan_handle);
@@ -733,8 +688,6 @@ p4_switch_interface_port_to_lag (struct ofbundle *bundle)
     /* delete port_if_handle */
     switch_api_interface_delete(0, port_if_handle);
 }
-
-// XXX: lag_to_port : Transition from lag to port when n_slaves decrments to 1
 
 /* Bundles. */
 static int
@@ -798,8 +751,6 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         bundle->name = xstrdup(s->name);
     }
 
-    /* XXX code taken from container plug-in check and fix when LAG is supported */
-    /* Update set of ports. */
     ok = true;
     for (i = 0; i < s->n_slaves; i++) {
         if (!bundle_add_port(bundle, s->slaves[i])) {
@@ -826,7 +777,7 @@ found:     ;
         return 0;
     }
 
-    VLOG_INFO("Bridge/VRF name=%s type=%s bundle=%s",
+    VLOG_DBG("Bridge/VRF name=%s type=%s bundle=%s",
              ofproto->up.name, ofproto->up.type, bundle->name);
 
     if(strcmp(bundle->name, "bridge_normal") == 0) {
@@ -834,7 +785,6 @@ found:     ;
          * switchapi supports creating system_acls to redirect
          * certain tpye of packets to CPU.
          * Setup these ACLs to for STP, LLDP, LACP packets by default.
-         * XXX - need to make then per-port/per-vlan in future
          */
         switch_api_hostif_rcode_info_t rcode_info;
         memset(&rcode_info, 0, sizeof(rcode_info));
@@ -866,15 +816,15 @@ found:     ;
         p4_switch_interface_port_to_lag(bundle);
     }
     if (!bundle->is_lag && s->n_slaves == 1) {
-        // XXX check single port swap case - need to delete and recreate
-        // P4 interface with new port handle
+        /* XXX check single port swap case - need to delete and recreate
+         * P4 interface with new port handle
+         */
     }
-
 
     /* Need to check the old and new bundle parmeters to handle transitions
      * Old          :   New
      * Access, v1   : Access, v2 -> delete pv1, create pv2
-     * Access, v1   : Trunk -> delete pv1, delete intf, create intf, create all tunks
+     * Access, v1   : Trunk -> delete pv1, delete intf, create intf, create all trunks
      * Trunk, v1    : Trunk, v2 -> delete pv1, create pv2
      * Trunk, vlans1: Trunk vlans2 -> delete pv(remove), create pv(added)
      * Trunk        : Access, v1 -> delete pv(all), delete intf, create intf, create pv1
@@ -884,8 +834,8 @@ found:     ;
         /* XXX tag_mode is not supported yet. It is always untagged for native vlans */
         vlan_mode_to_port_type(s->vlan_mode, &new_port_type, &tag_mode);
     } else {
-        /* If this bundle is attached to VRF or it is a VLAN based internal
-         * bundle, then it is an L3 interface
+        /* If this bundle is attached to VRF bundle, then it is an L3 interface
+         * XXX: Handle vlan internal interface bundle
          */
         new_port_type = SWITCH_API_INTERFACE_L3;
     }
@@ -910,7 +860,7 @@ found:     ;
     if (bundle->vlan != s->vlan) {
         struct ofp4vlan *p4vlan;
 
-        VLOG_INFO("bundle_set - native vlan changed from %d to %d", bundle->vlan, s->vlan);
+        VLOG_DBG("bundle_set - native vlan changed from %d to %d", bundle->vlan, s->vlan);
         if (bundle->vlan != -1) {
             /* delete it. If part of user specified vlans, will be added again later */
             p4_switch_vlan_port_delete(bundle, bundle->vlan);
@@ -938,13 +888,13 @@ found:     ;
     } else if (new_port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
         int b;
         /* remove pv mapping for the vlans removed and add for the new ones */
-        bundle->allow_all_trunks = (s->trunks == NULL); // NULL indicates allow all
+        bundle->allow_all_trunks = (s->trunks == NULL);
         for (b=0; b<VLAN_BITMAP_SIZE; b++) {
             bool vlan_old = false;
             bool vlan_new = false;
 
             if (bundle->vlan == b) {
-                continue; // handled earlier
+                continue;
             }
             if (bitmap_is_set(bundle->trunks, b))
             {
@@ -952,7 +902,7 @@ found:     ;
             }
             if (!s->trunks || bitmap_is_set(s->trunks, b))
             {
-                // s->trunks == NULL => all vlans are allowed
+                /* s->trunks == NULL => all vlans are allowed */
                 vlan_new = true;
             }
             if (vlan_old != vlan_new) {
@@ -963,12 +913,14 @@ found:     ;
                 }
                 if (vlan_new) {
                     int vlan_add_err = 0;
-                    // Try to add new vlan if it is created via set_vlan()
-                    // if not, remember it for future addition
+                    /* Try to add new vlan if it is created via set_vlan()
+                     * if not, remember it for future addition
+                     */
                     vlan_add_err = p4_switch_vlan_port_create(bundle, b);
                     if (!vlan_add_err || s->trunks) {
-                        // add to bit map if it was specified by the user
-                        // or was added successfully
+                        /* add to bit map if it was specified by the user
+                         * or was added successfully
+                         */
                         bitmap_set1(bundle->trunks, b);
                     }
                 }
@@ -980,7 +932,6 @@ found:     ;
         VLOG_ERR("un-supported interface type");
         return EINVAL;
     }
-    VLOG_INFO("bundle_set - Done");
     return ret_val;
 }
 
@@ -1009,13 +960,6 @@ bundle_remove(struct ofport *port_)
         VLOG_INFO("bundle_remove port bundle %s port %s", bundle->name,
                     netdev_get_name(port_->netdev));
         bundle_del_port(port);
-
-#if 0 // XXX: don't do it here - may run into this if single member is swapped with another
-        /* If there are no ports left, delete the bunble. */
-        if (list_is_empty(&bundle->ports)) {
-            bundle_destroy(bundle);
-        }
-#endif
     }
 }
 
@@ -1058,13 +1002,12 @@ p4_bundles_vlan_update (struct sim_provider_node *ofproto, struct ofp4vlan *p4vl
                 bitmap_set0(bundle->trunks, p4vlan->vid);
             }
         }
-        VLOG_INFO("Update vlan %d on bundle %s", p4vlan->vid, bundle->name);
         vlan_port[l2_bundles].handle = bundle->if_handle;
         vlan_port[l2_bundles].tagging_mode = bundle->tag_mode;
         l2_bundles++;
     }
     if (l2_bundles == 0) {
-        VLOG_INFO("p4_bundles_vlan_update - no bundles found");
+        VLOG_DBG("p4_bundles_vlan_update - no bundles found");
         free(vlan_port);
         return;
     }
@@ -1117,7 +1060,6 @@ set_vlan(struct ofproto *ofproto_, int vid, bool add)
         p4_bundles_vlan_update(ofproto, p4vlan, false/*add*/);
         free(p4vlan);
     }
-    VLOG_INFO("set_vlan - Done");
     return 0;
 }
 
@@ -1185,7 +1127,6 @@ port_add(struct ofproto *ofproto_, struct netdev *netdev)
     const char *devname = netdev_get_name(netdev);
 
     VLOG_INFO("port_add: %s", devname);
-    // Lock before sset_add ??
     sset_add(&ofproto->ports, devname);
 
     return 0;
@@ -1286,8 +1227,7 @@ port_dump_done(const struct ofproto *ofproto_ OVS_UNUSED, void *state_)
     return 0;
 }
 
-static struct sim_provider_rule
-*
+static struct sim_provider_rule *
 sim_provider_rule_cast(const struct rule *rule)
 {
     return NULL;
@@ -1500,10 +1440,12 @@ port_l3_host_add(struct ofproto *ofproto_, bool is_ipv6, char *ip_addr)
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     switch_handle_t nhop_handle = 0;
 
-    VLOG_INFO("ofproto_host_add called for ip %s", ip_addr);
-
     ip_address.type = is_ipv6 ? SWITCH_API_IP_ADDR_V6 : SWITCH_API_IP_ADDR_V4;
 
+    /*
+     * interface address is always a host IP.
+     * set the prefix length to 32 or 128.
+     */
     if (!is_ipv6) {
         ip_string_to_prefix(
                 is_ipv6,
@@ -1528,7 +1470,7 @@ port_l3_host_add(struct ofproto *ofproto_, bool is_ipv6, char *ip_addr)
                 &ip_address,
                 nhop_handle);
     if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_INFO("failed to add route");
+        VLOG_ERR("failed to add route");
         return 1;
     }
 
@@ -1548,8 +1490,6 @@ port_l3_host_delete(struct ofproto *ofproto_, bool is_ipv6, char *ip_addr)
     switch_ip_addr_t ip_address;
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     switch_handle_t nhop_handle = 0;
-
-    VLOG_INFO("ofproto_host_delete called for ip %s", ip_addr);
 
     ip_address.type = is_ipv6 ? SWITCH_API_IP_ADDR_V6 : SWITCH_API_IP_ADDR_V4;
 
@@ -1577,8 +1517,16 @@ port_l3_host_delete(struct ofproto *ofproto_, bool is_ipv6, char *ip_addr)
                 &ip_address,
                 nhop_handle);
     if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_INFO("failed to add route");
+        VLOG_ERR("failed to delete route");
+        return EINVAL;
     }
+
+    VLOG_INFO("vrf %lx v4_ip %x prefix %d nhop %lx",
+               ofproto->vrf_handle,
+               ip_address.ip.v4addr,
+               ip_address.prefix_len,
+               nhop_handle);
+    return 0;
 }
 
 static int
@@ -1587,12 +1535,10 @@ port_ip_reconfigure(struct ofproto *ofproto, struct ofbundle *bundle,
 {
     bool is_ipv6 = false;
 
-    VLOG_INFO("In port_ip_reconfigure with ip_change val=0x%x", s->ip_change);
+    VLOG_DBG("In port_ip_reconfigure with ip_change val=0x%x", s->ip_change);
     /* If primary ipv4 got added/deleted/modified */
     if (s->ip_change & PORT_PRIMARY_IPv4_CHANGED) {
         if (s->ip4_address) {
-            // XXX simplify - if old addr ! NULL remove
-            // if new_addr != NULL add ??
             if (bundle->ip4_address) {
                 if (strcmp(bundle->ip4_address, s->ip4_address) != 0) {
                     /* If current and earlier are different, delete old */
@@ -1653,16 +1599,7 @@ port_ip_reconfigure(struct ofproto *ofproto, struct ofbundle *bundle,
         }
     }
 
-    /* If any secondary ipv4 addr added/deleted/modified */
-    if (s->ip_change & PORT_SECONDARY_IPv4_CHANGED) {
-        VLOG_DBG("ip4_address_secondary modified");
-        //port_config_secondary_ipv4_addr(ofproto, bundle, s);
-    }
-
-    if (s->ip_change & PORT_SECONDARY_IPv6_CHANGED) {
-        VLOG_DBG("ip6_address_secondary modified");
-        //port_config_secondary_ipv6_addr(ofproto, bundle, s);
-    }
+    /* TODO: support for secondary ip address */
 
     return 0;
 }
@@ -1683,8 +1620,6 @@ add_l3_host_entry(const struct ofproto *ofproto_, void *aux,
     switch_handle_t neigh_handle = 0;
     switch_nhop_key_t nhop_key;
 
-    VLOG_INFO("received add_l3_host_entry");
-
     mac_addr = ether_aton(next_hop_mac_addr);
 
     if (!mac_addr || !next_hop_mac_addr) {
@@ -1695,7 +1630,7 @@ add_l3_host_entry(const struct ofproto *ofproto_, void *aux,
     bundle = bundle_lookup(ofproto, aux);
     if (bundle == NULL) {
         VLOG_ERR("Failed to get port bundle/l3_intf not configured");
-        return 1; /* Return error */
+        return EINVAL;
     }
 
     memset(&nhop_key, 0, sizeof(nhop_key));
@@ -1731,14 +1666,13 @@ add_l3_host_entry(const struct ofproto *ofproto_, void *aux,
 
     neigh_handle = switch_api_neighbor_entry_add(0x0, &api_neighbor);
 
-    VLOG_INFO("is v6 addr: %d", (int)is_ipv6_addr);
-    VLOG_INFO("ip addr: %s", ip_addr);
-    VLOG_INFO("mac addr: %s", next_hop_mac_addr);
-    VLOG_INFO("nhop handle %lx", nhop_handle);
-    VLOG_INFO("neigh handle %lx", neigh_handle);
+    VLOG_DBG("is v6 addr: %d", (int)is_ipv6_addr);
+    VLOG_DBG("ip addr: %s", ip_addr);
+    VLOG_DBG("mac addr: %s", next_hop_mac_addr);
+    VLOG_DBG("nhop handle %lx", nhop_handle);
+    VLOG_DBG("neigh handle %lx", neigh_handle);
 
     *l3_egress_id = handle_to_id(nhop_handle);
-    VLOG_INFO("l3 egress id %d", *l3_egress_id);
 
     status = switch_api_l3_route_add(
                              0x0,
@@ -1747,9 +1681,9 @@ add_l3_host_entry(const struct ofproto *ofproto_, void *aux,
                              nhop_handle);
 
     if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_INFO("add_l3_host_entry failed");
+        VLOG_ERR("add_l3_host_entry failed");
     } else {
-        VLOG_INFO("add_l3_host_entry success");
+        VLOG_DBG("add_l3_host_entry success");
     }
 
     return 0;
@@ -1766,12 +1700,10 @@ delete_l3_host_entry(const struct ofproto *ofproto_, void *aux,
     int rc = 0;
     switch_status_t status = SWITCH_STATUS_SUCCESS;
 
-    VLOG_INFO("received delete_l3_host_entry");
-
     bundle = bundle_lookup(ofproto, aux);
     if (bundle == NULL) {
         VLOG_ERR("Failed to get port bundle/l3_intf not configured");
-        return 1; /* Return error */
+        return EINVAL;
     }
 
     ip_address.type = is_ipv6_addr ? SWITCH_API_IP_ADDR_V6 : SWITCH_API_IP_ADDR_V4;
@@ -1790,10 +1722,9 @@ delete_l3_host_entry(const struct ofproto *ofproto_, void *aux,
                 &ip_address.prefix_len);
     }
 
-    VLOG_INFO("is v6 addr: %d", (int)is_ipv6_addr);
-    VLOG_INFO("ip addr: %s", ip_addr);
-
-    VLOG_INFO("l3 egress id %d", *l3_egress_id);
+    VLOG_DBG("is v6 addr: %d", (int)is_ipv6_addr);
+    VLOG_DBG("ip addr: %s", ip_addr);
+    VLOG_DBG("l3 egress id %d", *l3_egress_id);
     switch_handle_t nhop_handle = id_to_handle(SWITCH_HANDLE_TYPE_NHOP, *l3_egress_id);
 
     status = switch_api_l3_route_delete(
@@ -1803,8 +1734,7 @@ delete_l3_host_entry(const struct ofproto *ofproto_, void *aux,
                              nhop_handle);
 
     if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_INFO("route delete failed");
-        return EINVAL;
+        VLOG_ERR("route delete failed");
     }
 
     switch_handle_t neighbor_handle = switch_api_neighbor_handle_get(nhop_handle);
@@ -1812,14 +1742,12 @@ delete_l3_host_entry(const struct ofproto *ofproto_, void *aux,
         status = switch_api_neighbor_entry_remove(0x0, neighbor_handle);
         if (status != SWITCH_STATUS_SUCCESS) {
             VLOG_ERR("neighbor delete failed");
-            return EINVAL;
         }
     }
 
     status = switch_api_nhop_delete(0x0, nhop_handle);
     if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_INFO("nhop delete failed");
-        return EINVAL;
+        VLOG_ERR("nhop delete failed");
     }
 
     return 0;
@@ -1856,7 +1784,7 @@ l3_nexthop_hash_insert(
     hmap_insert(&ops_routep->nexthops, &nh->node, hash_string(hashstr, 0));
     ops_routep->n_nexthops++;
 
-    VLOG_INFO("Add NH %s, egress_id %d, for route %s",
+    VLOG_DBG("Add NH %s, egress_id %d, for route %s",
               nh->id, nh->nhop_handle, ops_routep->prefix);
 }
 
@@ -1870,7 +1798,7 @@ l3_nexthop_hash_delete(
         return;
     }
 
-    VLOG_INFO("Delete NH %s in route %s", nh->id, ops_routep->prefix);
+    VLOG_DBG("Delete NH %s in route %s", nh->id, ops_routep->prefix);
 
     hmap_remove(&ops_routep->nexthops, &nh->node);
     if (nh->id) {
@@ -1959,7 +1887,7 @@ l3_route_hash_insert(
 
     l3_route_compute_hash(vrf_handle, of_routep->prefix, hashstr, sizeof(hashstr));
     hmap_insert(&l3_route_table, &ops_routep->node, hash_string(hashstr, 0));
-    VLOG_INFO("route hash inserted %lx: %s", vrf_handle, ops_routep->prefix);
+    VLOG_DBG("route hash inserted %lx: %s", vrf_handle, ops_routep->prefix);
     return ops_routep;
 }
 
@@ -1996,7 +1924,7 @@ l3_route_hash_update(
             }
         }
     }
-    VLOG_INFO("route hash updated %lx: %s", vrf_handle, ops_routep->prefix);
+    VLOG_DBG("route hash updated %lx: %s", vrf_handle, ops_routep->prefix);
 }
 
 /* Delete route in system*/
@@ -2010,8 +1938,6 @@ l3_route_hash_delete(
         return;
     }
 
-    VLOG_DBG("delete route %s", ops_routep->prefix);
-
     hmap_remove(&l3_route_table, &ops_routep->node);
 
     HMAP_FOR_EACH_SAFE(nh, next, node, &ops_routep->nexthops) {
@@ -2022,7 +1948,7 @@ l3_route_hash_delete(
         free(ops_routep->prefix);
     }
 
-    VLOG_INFO("route hash deleted %lx: %s",
+    VLOG_DBG("route hash deleted %lx: %s",
                ops_routep->vrf_handle,
                ops_routep->prefix);
 
@@ -2038,17 +1964,17 @@ l3_dump_route_entry(const struct ofproto *ofproto_,
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
     int index = 0;
 
-    VLOG_INFO("vrf %lx", ofproto->vrf_handle);
-    VLOG_INFO("ip address %s", of_routep->prefix);
-    VLOG_INFO("n_nexthops %d", of_routep->n_nexthops);
+    VLOG_DBG("vrf %lx", ofproto->vrf_handle);
+    VLOG_DBG("ip address %s", of_routep->prefix);
+    VLOG_DBG("n_nexthops %d", of_routep->n_nexthops);
 
     for (index = 0; index < of_routep->n_nexthops; index++) {
         nh = &of_routep->nexthops[index];
-        VLOG_INFO("nhop %d", index + 1);
-        VLOG_INFO("id %s", nh->id);
-        VLOG_INFO("type %s", nh->type == OFPROTO_NH_PORT ? "port" : "ip");
-        VLOG_INFO("state %s", nh->state == OFPROTO_NH_RESOLVED ? "resolved" : "unresolved");
-        VLOG_INFO("l3_egress_id %d", nh->l3_egress_id);
+        VLOG_DBG("nhop %d", index + 1);
+        VLOG_DBG("id %s", nh->id);
+        VLOG_DBG("type %s", nh->type == OFPROTO_NH_PORT ? "port" : "ip");
+        VLOG_DBG("state %s", nh->state == OFPROTO_NH_RESOLVED ? "resolved" : "unresolved");
+        VLOG_DBG("l3_egress_id %d", nh->l3_egress_id);
     }
     return 0;
 }
@@ -2160,6 +2086,7 @@ l3_route_entry_new(
     } else {
         HMAP_FOR_EACH(ops_nh, node, &ops_routep->nexthops) {
             handle = ops_nh->nhop_handle;
+            break;
         }
     }
 
@@ -2172,7 +2099,8 @@ l3_route_entry_new(
         VLOG_ERR("failed to add new route %d", status);
         return EINVAL;
     }
-    VLOG_INFO("P4: route added with handle %lx", handle);
+
+    VLOG_INFO("route added with handle %lx", handle);
     return 0;
 }
 
@@ -2267,6 +2195,7 @@ l3_route_entry_update(
             return rc;
         }
         handle = ops_routep->handle;
+        return 0;
     }
 
     status = switch_api_l3_route_add(
@@ -2278,7 +2207,7 @@ l3_route_entry_update(
         VLOG_ERR("failed to add new route");
         return EINVAL;
     }
-    VLOG_INFO("P4: route updated with handle %lx", handle);
+    VLOG_INFO("route updated with handle %lx", handle);
     return 0;
 }
 
@@ -2293,8 +2222,6 @@ l3_route_entry_add(const struct ofproto *ofproto_,
     switch_handle_t handle = 0;
     struct ops_nexthop *ops_nh = NULL;
     int rc = 0;
-
-    VLOG_INFO("l3_route_entry_add");
 
     l3_dump_route_entry(ofproto_, of_routep, ip_address);
 
@@ -2331,8 +2258,7 @@ l3_route_entry_delete(
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
     struct ops_route *ops_routep = NULL;
     switch_status_t status = SWITCH_STATUS_SUCCESS;
-
-    VLOG_INFO("l3_route_entry_delete");
+    int error = 0;
 
     l3_dump_route_entry(ofproto_, of_routep, ip_address);
 
@@ -2342,7 +2268,7 @@ l3_route_entry_delete(
         return EINVAL;
     }
 
-    l3_route_hash_delete(ops_routep);
+    /* XXX: Delete ecmp and its members */
 
     status = switch_api_l3_route_delete(
                              0x0,
@@ -2352,10 +2278,12 @@ l3_route_entry_delete(
 
     if (status != SWITCH_STATUS_SUCCESS) {
         VLOG_ERR("failed to delete route entry");
-        return EINVAL;
+        error = EINVAL;
     }
 
-    return 0;
+    l3_route_hash_delete(ops_routep);
+
+    return error;
 }
 
 static int
@@ -2373,8 +2301,6 @@ l3_nhop_entry_delete(
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     int rc = 0;
 
-    VLOG_INFO("l3_nhop_entry_delete");
-
     l3_dump_route_entry(ofproto_, of_routep, ip_address);
 
     vrf_handle = ofproto->vrf_handle;
@@ -2386,11 +2312,12 @@ l3_nhop_entry_delete(
     }
 
     new_n_nexthops = ops_routep->n_nexthops - of_routep->n_nexthops;
-    assert(new_n_nexthops >= 0);
+    ovs_assert(new_n_nexthops >= 0);
 
     /*
      * There can never be non-ecmp to non-ecmp or
-     * non-ecmp to ecmp */
+     * non-ecmp to ecmp
+     */
 
     /* ecmp to non-ecmp */
     if (new_n_nexthops <=1 && ops_routep->n_nexthops > 1) {
@@ -2433,7 +2360,7 @@ l3_nhop_entry_delete(
         VLOG_ERR("failed to add new route");
         return EINVAL;
     }
-    VLOG_INFO("P4: route added with handle %lx", handle);
+    VLOG_INFO("route added with handle %lx", handle);
     return 0;
 }
 
@@ -2444,7 +2371,6 @@ l3_route_action(const struct ofproto *ofproto,
 {
     switch_ip_addr_t ip_address;
     bool is_ipv6_addr = false;
-    VLOG_INFO("P4: received l3_route_action");
     int rc = 0;
 
     switch (of_routep->family) {
@@ -2470,8 +2396,8 @@ l3_route_action(const struct ofproto *ofproto,
             return EINVAL;
     }
 
-    VLOG_INFO("is v6 addr: %d", (int)is_ipv6_addr);
-    VLOG_INFO("ip addr: %s", of_routep->prefix);
+    VLOG_DBG("is v6 addr: %d", (int)is_ipv6_addr);
+    VLOG_DBG("ip addr: %s", of_routep->prefix);
 
     switch (action) {
         case OFPROTO_ROUTE_ADD:

@@ -107,8 +107,7 @@ netdev_sim_construct(struct netdev *netdev_)
     static atomic_count next_n = ATOMIC_COUNT_INIT(0x0000);
     struct netdev_sim *netdev = netdev_sim_cast(netdev_);
     unsigned int n;
-    // BaeFoo8 = Barefoot
-    unsigned int mac = 0xbaef0080;
+    unsigned int mac = 0xBA7EF008; /* BA7EF008 = Barefoot */
 
     n = atomic_count_inc(&next_n);
 
@@ -121,7 +120,7 @@ netdev_sim_construct(struct netdev *netdev_)
     netdev->hwaddr[2] = mac >> 16;
     netdev->hwaddr[3] = mac >> 8;
     netdev->hwaddr[4] = mac;
-    netdev->hwaddr[5] = n;    // 0-255 ports
+    netdev->hwaddr[5] = n;
     netdev->mtu = 1500;
     netdev->flags = 0;
     netdev->link_state = 0;
@@ -157,8 +156,7 @@ netdev_sim_dealloc(struct netdev *netdev_)
 static void
 netdev_sim_run(void)
 {
-    /* HALON_TODO: Currently we are not supporting to change the
-     * link state on the go. So ignoring this function. */
+    /* TODO - if needed */
 }
 
 static int
@@ -178,6 +176,7 @@ netdev_sim_internal_set_hw_intf_info(struct netdev *netdev_, const struct smap *
     ovs_mutex_unlock(&netdev->mutex);
     return 0;
 }
+
 static int
 netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
 {
@@ -194,14 +193,12 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
 
     strncpy(netdev->linux_intf_name, netdev->up.name, sizeof(netdev->linux_intf_name));
 
-    VLOG_INFO("P4:set_hw_intf for interface, %s", netdev->linux_intf_name);
+    VLOG_INFO("set_hw_intf for interface, %s", netdev->linux_intf_name);
 
-    /* XXX This code can be removed once ports.yaml is fixed. There are no splittable
-     * interfaces supported by P4 model
-     */
+    /* There are no splittable interfaces supported by P4 model */
     if ((is_splittable && !strncmp(is_splittable, "true", 4)) ||
         (mac_addr == NULL) || split_parent) {
-        VLOG_ERR("Split interface or NULL MAC is not supported- parent i/f %s",
+        VLOG_DBG("Split interface or NULL MAC is not supported- parent i/f %s",
                     split_parent ? split_parent : "NotSpecified");
         ovs_mutex_unlock(&netdev->mutex);
         return EINVAL;
@@ -209,14 +206,13 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
     if (netdev->port_handle == SWITCH_API_INVALID_HANDLE) {
         if (hw_id) {
             netdev->port_num = atoi(hw_id);
-            // switchapi uses 0 based port#
+            /* switchapi uses 0 based port# */
             netdev->port_handle = id_to_handle(SWITCH_HANDLE_TYPE_PORT,
                                                         netdev->port_num-1);
-            VLOG_INFO("P4:set_hw_intf create tap interface for port, %d",
+            VLOG_INFO("set_hw_intf create tap interface for port, %d",
                                                         netdev->port_num);
 
             if (mac_addr) {
-                VLOG_INFO("mac address on port %d : %s", netdev->port_num, mac_addr);
                 struct ether_addr *ether_mac = ether_aton(mac_addr);
                 if (ether_mac != NULL) {
                     memcpy(netdev->hwaddr, ether_mac, ETH_ALEN);
@@ -226,7 +222,7 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
                     memcpy(&mac.mac_addr, netdev->hwaddr, sizeof(switch_mac_addr_t));
                     status = switch_api_router_mac_add(0x0, netdev->rmac_handle, &mac);
                     if (status != SWITCH_STATUS_SUCCESS) {
-                        VLOG_INFO("P4: failed to add router mac for port %d", hw_id);
+                        VLOG_ERR("P4: failed to add router mac for port %d", hw_id);
                     }
                 }
             }
@@ -238,7 +234,6 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
             if (system(cmd) != 0) {
                 VLOG_ERR("NETDEV-SIM | system command failure cmd=%s", cmd);
             }
-#if 1
             if (netdev->hostif_handle == SWITCH_API_INVALID_HANDLE) {
                 switch_hostif_t     hostif;
                 memset(&hostif, 0, sizeof(hostif));
@@ -247,7 +242,6 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
                 netdev->hostif_handle = switch_api_hostif_create(0, &hostif);
                 VLOG_INFO("switch_api_hostif_create handle 0x%x", netdev->hostif_handle);
             }
-#endif
         } else {
             VLOG_ERR("No hw_id available");
             ovs_mutex_unlock(&netdev->mutex);
@@ -271,7 +265,6 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
     } else {
         VLOG_ERR("Invalid mac address %s", mac_addr);
     }
-
 
     sprintf(cmd, "%s /sbin/ip link set %s address %s",
             SWNS_EXEC, netdev->up.name, netdev->hw_addr_str);
@@ -316,11 +309,12 @@ netdev_sim_internal_set_hw_intf_config(struct netdev *netdev_, const struct smap
     ovs_mutex_lock(&netdev->mutex);
     strncpy(netdev->linux_intf_name, netdev->up.name, sizeof(netdev->linux_intf_name));
     /* XXX handle internal interface up/down - SVI and bridge_normal */
-    VLOG_INFO("TBD - set_internal_hw_intf_config for %s, enable $d", netdev->linux_intf_name,
-                hw_enable);
+    VLOG_INFO("TBD - netdev_sim_internal_set_hw_intf_config for %s, enable $d",
+               netdev->linux_intf_name, hw_enable);
     ovs_mutex_unlock(&netdev->mutex);
     return 0;
 }
+
 static int
 netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
 {
@@ -333,7 +327,7 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
 
     ovs_mutex_lock(&netdev->mutex);
 
-    VLOG_INFO("P4:Interface=%s hw_enable=%d ", netdev->linux_intf_name, hw_enable);
+    VLOG_DBG("Interface=%s hw_enable=%d ", netdev->linux_intf_name, hw_enable);
 
     memset(cmd, 0, sizeof(cmd));
 
@@ -349,15 +343,6 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
         netdev->autoneg = autoneg;
         if(pause)
             get_interface_pause_config(pause, &(netdev->pause_rx), &(netdev->pause_tx));
-#if 0
-        if (netdev->hostif_handle == SWITCH_API_INVALID_HANDLE) {
-            memset(&hostif, 0, sizeof(hostif));
-            hostif.handle = netdev->port_handle;
-            strncpy(hostif.intf_name, netdev->linux_intf_name, sizeof(hostif.intf_name));
-            netdev->hostif_handle = switch_api_hostif_create(0, &hostif);
-            VLOG_INFO("switch_api_hostif_create handle 0x%x", netdev->hostif_handle);
-        }
-#endif
     } else {
         netdev->flags &= ~NETDEV_UP;
         netdev->link_state = 0;
@@ -366,19 +351,6 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
         netdev->autoneg = false;
         netdev->pause_tx = false;
         netdev->pause_rx = false;
-
-#if 0
-        if (netdev->hostif_handle != SWITCH_API_INVALID_HANDLE) {
-            if (switch_api_hostif_delete(0, netdev->hostif_handle)) {
-                VLOG_ERR("switch_api_hostif_delete handle 0x%x - Failed",
-                            netdev->hostif_handle);
-            }
-            else {
-                VLOG_INFO("switch_api_hostif_delete handle 0x%x", netdev->hostif_handle);
-                netdev->hostif_handle = SWITCH_API_INVALID_HANDLE;
-            }
-        }
-#endif
     }
     sprintf(cmd, "%s /sbin/ip link set dev %s %s",
                 SWNS_EXEC, netdev->linux_intf_name, hw_enable ? "up" : "down");
@@ -386,10 +358,7 @@ netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
         VLOG_ERR("system command failure: cmd=%s",cmd);
     }
 
-    /* also operate on emulns interface that feed into model */
-    /* Since these interfaces are externally created (by VSI), these cmds may fail for
-     * interfaces not created - ignore the error
-     */
+    /* Operate on emulns interface that feed into the model */
     sprintf(cmd, "%s /sbin/ip link set dev %s %s",
                 EMULNS_EXEC, netdev->linux_intf_name, hw_enable ? "up" : "down");
     system(cmd);
@@ -434,6 +403,7 @@ netdev_sim_internal_get_stats(const struct netdev *netdev, struct netdev_stats *
 {
     struct netdev_sim *dev = netdev_sim_cast(netdev);
 
+    /* XXX handle internal interface stats - SVI and bridge_normal */
     ovs_mutex_lock(&dev->mutex);
     *stats = dev->stats;
     ovs_mutex_unlock(&dev->mutex);
@@ -536,8 +506,6 @@ netdev_sim_get_carrier(const struct netdev *netdev_, bool *carrier)
 
     return 0;
 }
-
-
 
 /* Helper functions. */
 int netdev_get_device_port_handle(struct netdev *netdev_,
@@ -696,6 +664,7 @@ static const struct netdev_class sim_internal_class = {
     NULL,                       /* rxq_wait */
     NULL,                       /* rxq_drain */
 };
+
 void
 netdev_sim_register(void)
 {

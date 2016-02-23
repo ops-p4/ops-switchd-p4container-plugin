@@ -27,6 +27,10 @@
 #define OVS_VSCTL               "/opt/openvswitch/bin/ovs-vsctl"
 #define ASIC_OVSDB_PATH         "/var/run/openvswitch-sim/ovsdb.db"
 
+#define OPS_ROUTE_HASH_MAXSIZE 64
+
+#define MAX_NEXTHOPS_PER_ROUTE 16
+
 struct sim_provider_rule {
     struct rule up;
     struct ovs_mutex stats_mutex;
@@ -194,6 +198,22 @@ struct sim_provider_port_dump_state {
 
     struct ofproto_port port;
     bool has_port;
+};
+
+struct ops_route {
+    struct hmap_node node;
+    switch_handle_t vrf_handle;
+    char *prefix;
+    bool is_ipv6_addr;
+    int n_nexthops;
+    struct hmap nexthops;
+    switch_handle_t handle;
+};
+
+struct ops_nexthop {
+    struct hmap_node node;
+    char *id;
+    switch_handle_t nhop_handle;
 };
 
 enum { N_TABLES = 255 };

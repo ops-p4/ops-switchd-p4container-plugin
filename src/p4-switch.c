@@ -56,13 +56,9 @@ emulns_nl_sock_init()
     }
 
     memset((void *) &s_addr, 0, sizeof(s_addr));
-#if 1
     s_addr.nl_family = AF_NETLINK;
-    s_addr.nl_pid = 0; //getpid();
+    s_addr.nl_pid = 0;
     s_addr.nl_groups = 0;
-#else
-    s_addr.sa_family = AF_NETLINK;
-#endif
 
     if (connect(sock, (struct sockaddr *) &s_addr, sizeof(s_addr)) < 0) {
         VLOG_ERR("Socket connect failed");
@@ -89,13 +85,11 @@ p4_switch_init ()
         if (setns(emulns_fd, 0) < 0) {
             VLOG_ERR("Failed to connect to netns for the model");
         } else {
-            VLOG_INFO("============== Using emulns for the model");
+            VLOG_INFO("Using emulns for the model");
         }
     }
     if ((swns_fd = open("/var/run/netns/swns", O_RDONLY)) < 0) {
         VLOG_ERR("Could not find swns - %s", strerror(errno));
-    } else {
-        VLOG_INFO("============== Found swns");
     }
     emulns_nl_sock_init();
     p4_pd_init();
@@ -112,7 +106,6 @@ p4_switch_init ()
         }
         VLOG_INFO("Switched back to swns");
     }
-
 }
 
 static void
@@ -178,7 +171,7 @@ p4_port_stats_get (const char *if_name, struct p4_port_stats *stats)
     memset (&rtnl_msg, 0, sizeof(rtnl_msg));
 
     kernel.nl_family = AF_NETLINK;
-    kernel.nl_pid = 0; //getpid();
+    kernel.nl_pid = 0;
     kernel.nl_groups = 0;
 
     req.hdr.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
@@ -217,7 +210,7 @@ p4_port_stats_get (const char *if_name, struct p4_port_stats *stats)
         char buffer[4096];
 
         nladdr.nl_family = AF_NETLINK;
-        nladdr.nl_pid = 0; //getpid();
+        nladdr.nl_pid = 0;
         nladdr.nl_groups = 0;
         iov.iov_base = (void *)buffer;
         iov.iov_len = sizeof(buffer);
@@ -240,16 +233,16 @@ p4_port_stats_get (const char *if_name, struct p4_port_stats *stats)
              NLMSG_OK(nlh, ret);
              nlh = NLMSG_NEXT(nlh, ret)) {
             switch(nlh->nlmsg_type) {
-            case RTM_NEWLINK:
-                netdev_parse_netlink_msg(nlh, stats);
-                break;
+                case RTM_NEWLINK:
+                    netdev_parse_netlink_msg(nlh, stats);
+                    break;
 
-            case NLMSG_DONE:
-                multipart_msg_end = true;
-                break;
+                case NLMSG_DONE:
+                    multipart_msg_end = true;
+                    break;
 
-            default:
-                break;
+                default:
+                    break;
             }
 
             if (!(nlh->nlmsg_flags & NLM_F_MULTI)) {
