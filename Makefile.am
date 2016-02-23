@@ -11,10 +11,10 @@ OVSCOMMON_INCLUDE_DIRS += -I $(PFX)/$(includedir)/ovs
 OVSCOMMON_LIB = $(PFX)/$(libdir)/libovscommon.la
 
 p4_plugin_files = \
-src/netdev-sim.c \
-src/ofproto-sim-provider.c \
+src/netdev-p4-sim.c \
+src/ofproto-p4-sim-provider.c \
 src/p4-switch.c \
-src/sim-plugins.c
+src/p4-sim-plugins.c
 
 noinst_LTLIBRARIES = libovs_p4_sim_plugin_interface.la
 libovs_p4_sim_plugin_interface_la_SOURCES = $(p4_plugin_files)

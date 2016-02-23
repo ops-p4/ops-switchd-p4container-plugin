@@ -34,7 +34,7 @@
 
 #include "p4-switch.h"
 #include "openvswitch/vlog.h"
-#include "netdev-sim.h"
+#include "netdev-p4-sim.h"
 
 
 #define SWNS_EXEC       "/sbin/ip netns exec swns"

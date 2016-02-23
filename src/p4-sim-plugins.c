@@ -1,5 +1,5 @@
 /*
- *  (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+ *  Copyright (C) 2016 Barefoot Networks Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may
  *  not use this file except in compliance with the License. You may obtain
@@ -18,11 +18,9 @@
 #include "openvswitch/vlog.h"
 #include "netdev-provider.h"
 #include "ofproto/ofproto-provider.h"
-#include "netdev-sim.h"
-#include "ofproto-sim-provider.h"
-#if 1
+#include "netdev-p4-sim.h"
+#include "ofproto-p4-sim-provider.h"
 #include "p4-switch.h"
-#endif
 
 #define init libovs_p4_sim_plugin_LTX_init
 #define run libovs_p4_sim_plugin_LTX_run

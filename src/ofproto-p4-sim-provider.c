@@ -1,7 +1,7 @@
 /*
  * (c) Copyright 2015 Hewlett Packard Enterprise Development LP
  * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
- * XXX Add BFN (C) 2016 here ???
+ * Copyright (C) 2016 Barefoot Networks Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,10 +32,10 @@
 #include "unaligned.h"
 #include "vlan-bitmap.h"
 #include "openvswitch/vlog.h"
-#include "ofproto-sim-provider.h"
+#include "ofproto-p4-sim-provider.h"
 #include "vswitch-idl.h"
 
-#include "netdev-sim.h"
+#include "netdev-p4-sim.h"
 #include <netinet/ether.h>
 #include <assert.h>
 
