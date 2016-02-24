@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
  * Copyright (C) 2015 Hewlett-Packard Development Company, L.P.
+ * Copyright (C) 2016 Barefoot Networks Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,17 +16,23 @@
  * limitations under the License.
  */
 
-#ifndef NETDEV_SIM_H
-#define NETDEV_SIM_H 1
+#ifndef NETDEV_P4_SIM_H
+#define NETDEV_P4_SIM_H 1
 
 #include "netdev-provider.h"
+#include "p4-switch.h"
 
 #define STR_EQ(s1, s2)      ((s1 != NULL) && (s2 != NULL) && \
                              (strlen((s1)) == strlen((s2))) && \
                              (!strncmp((s1), (s2), strlen((s2)))))
 
+#define MAX_CMD_BUF 1024
 /* SIM provider API. */
 void netdev_sim_register(void);
-extern int netdev_sim_get_hw_id(struct netdev *netdev);
+extern int netdev_get_device_port_handle(struct netdev *netdev_,
+                int32_t *device, switch_handle_t *port_handle);
 
-#endif /* netdev-sim.h */
+extern int netdev_get_port_rmac_handle(struct netdev *netdev_,
+                switch_handle_t *rmac_handle);
+
+#endif /* netdev-p4-sim.h */
