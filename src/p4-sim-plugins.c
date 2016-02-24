@@ -31,7 +31,7 @@
 
 #define MAX_CMD_LEN             50
 
-VLOG_DEFINE_THIS_MODULE(sim_plugin);
+VLOG_DEFINE_THIS_MODULE(P4_sim_plugin);
 
 void
 init(void)

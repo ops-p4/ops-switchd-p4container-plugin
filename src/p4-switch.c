@@ -32,7 +32,7 @@
 #include "openvswitch/vlog.h"
 #include "p4-switch.h"
 
-VLOG_DEFINE_THIS_MODULE(P4_sim_plugin);
+VLOG_DEFINE_THIS_MODULE(P4_switch_sim_plugin);
 
 /* netlink socket to emulns namespace - to get interface stats */
 static int emulns_nl_sockfd;

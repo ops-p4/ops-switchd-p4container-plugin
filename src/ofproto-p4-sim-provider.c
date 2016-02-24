@@ -50,6 +50,12 @@ VLOG_DEFINE_THIS_MODULE(P4_ofproto_provider_sim);
 static void p4_switch_vlan_port_delete (struct ofbundle *bundle, int32_t vlan);
 static void p4_switch_interface_delete (struct ofbundle *bundle);
 
+static void rule_get_stats(struct rule *, uint64_t * packets,
+                           uint64_t * bytes, long long int *used);
+static void bundle_remove(struct ofport *);
+static struct sim_provider_ofport *get_ofp_port(const struct sim_provider_node
+                                                *ofproto, ofp_port_t ofp_port);
+
 static struct hmap l3_route_table;
 
 static int
@@ -225,21 +231,14 @@ construct(struct ofproto *ofproto_)
     ovs_mutex_init_adaptive(&ofproto->stats_mutex);
     ovs_mutex_init(&ofproto->vsp_mutex);
 
-    guarded_list_init(&ofproto->pins);
-
     sset_init(&ofproto->ports);
     sset_init(&ofproto->ghost_ports);
-    sset_init(&ofproto->port_poll_set);
-    ofproto->port_poll_errno = 0;
     ofproto->change_seq = 0;
-    ofproto->pins_seq = seq_create();
-    ofproto->pins_seqno = seq_read(ofproto->pins_seq);
 
     hmap_insert(&all_sim_provider_nodes, &ofproto->all_sim_provider_node,
                 hash_string(ofproto->up.name, 0));
 
     memset(&ofproto->stats, 0, sizeof ofproto->stats);
-    ofproto->vlans_bmp = bitmap_allocate(VLAN_BITMAP_SIZE);
     ofproto->vlan_intf_bmp = bitmap_allocate(VLAN_BITMAP_SIZE);
     ofproto_init_tables(ofproto_, N_TABLES);
     ofproto->up.tables[TBL_INTERNAL].flags = OFTABLE_HIDDEN | OFTABLE_READONLY;
@@ -274,7 +273,6 @@ destruct(struct ofproto *ofproto_ OVS_UNUSED)
 
     sset_destroy(&ofproto->ports);
     sset_destroy(&ofproto->ghost_ports);
-    sset_destroy(&ofproto->port_poll_set);
 
     ovs_mutex_destroy(&ofproto->stats_mutex);
     ovs_mutex_destroy(&ofproto->vsp_mutex);
@@ -732,7 +730,6 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         bundle->trunks = bitmap_allocate(VLAN_BITMAP_SIZE);
         bundle->allow_all_trunks = false;
         bundle->bond = NULL;
-        bundle->is_added_to_sim_ovs = false;
         bundle->is_vlan_routing_enabled = false;
         bundle->is_bridge_bundle = false;
         bundle->tag_mode =  SWITCH_VLAN_PORT_UNTAGGED;

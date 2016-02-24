@@ -16,8 +16,8 @@
  * limitations under the License.
  */
 
-#ifndef NETDEV_SIM_H
-#define NETDEV_SIM_H 1
+#ifndef NETDEV_P4_SIM_H
+#define NETDEV_P4_SIM_H 1
 
 #include "netdev-provider.h"
 #include "p4-switch.h"
@@ -26,6 +26,7 @@
                              (strlen((s1)) == strlen((s2))) && \
                              (!strncmp((s1), (s2), strlen((s2)))))
 
+#define MAX_CMD_BUF 1024
 /* SIM provider API. */
 void netdev_sim_register(void);
 extern int netdev_get_device_port_handle(struct netdev *netdev_,
@@ -34,4 +35,4 @@ extern int netdev_get_device_port_handle(struct netdev *netdev_,
 extern int netdev_get_port_rmac_handle(struct netdev *netdev_,
                 switch_handle_t *rmac_handle);
 
-#endif /* netdev-sim.h */
+#endif /* netdev-p4-sim.h */

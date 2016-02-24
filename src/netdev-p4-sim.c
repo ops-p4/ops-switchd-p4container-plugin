@@ -187,7 +187,7 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
     const char *is_splittable = smap_get(args, INTERFACE_HW_INTF_INFO_MAP_SPLIT_4);
     const char *split_parent = smap_get(args, INTERFACE_HW_INTF_INFO_SPLIT_PARENT);
 
-    char cmd[1024];
+    char cmd[MAX_CMD_BUF];
 
     ovs_mutex_lock(&netdev->mutex);
 
@@ -411,6 +411,25 @@ netdev_sim_internal_get_stats(const struct netdev *netdev, struct netdev_stats *
     return 0;
 }
 
+static void
+netdev_p4_port_stats_copy(struct netdev_stats *stats, struct p4_port_stats *p4_stats)
+{
+    ovs_assert(stats && p4_stats);
+    memset(stats, 0, sizeof(struct netdev_stats));
+
+    stats->rx_packets = p4_stats->rx_packets;
+    stats->tx_packets = p4_stats->tx_packets;
+    stats->rx_bytes = p4_stats->rx_bytes;
+    stats->tx_bytes = p4_stats->tx_bytes;
+    stats->rx_errors = p4_stats->rx_errors;
+    stats->tx_errors = p4_stats->tx_errors;
+    stats->rx_dropped = p4_stats->rx_dropped;
+    stats->tx_dropped = p4_stats->tx_dropped;
+    stats->multicast = p4_stats->multicast;
+    stats->collisions = p4_stats->collisions;
+    stats->rx_crc_errors = p4_stats->rx_crc_errors;
+}
+
 static int
 netdev_sim_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
@@ -421,7 +440,7 @@ netdev_sim_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     memset(&port_stats, 0, sizeof(port_stats));
     ovs_mutex_lock(&dev->mutex);
     rc = p4_port_stats_get(dev->linux_intf_name, &port_stats);
-    dev->stats = *((struct netdev_stats *)&port_stats);    // HACK
+    netdev_p4_port_stats_copy(&dev->stats,&port_stats);
     *stats = dev->stats;
     ovs_mutex_unlock(&dev->mutex);
 

@@ -18,18 +18,13 @@
  *
  */
 
-#ifndef OFPROTO_SIM_PROVIDER_H
-#define OFPROTO_SIM_PROVIDER_H 1
+#ifndef OFPROTO_P4_SIM_PROVIDER_H
+#define OFPROTO_P4_SIM_PROVIDER_H 1
 
 #include "ofproto/ofproto-provider.h"
 #include "p4-switch.h"
 
-#define MAX_CLI                 1024
-#define OVS_VSCTL               "/opt/openvswitch/bin/ovs-vsctl"
-#define ASIC_OVSDB_PATH         "/var/run/openvswitch-sim/ovsdb.db"
-
 #define OPS_ROUTE_HASH_MAXSIZE 64
-
 #define MAX_NEXTHOPS_PER_ROUTE 16
 
 struct sim_provider_rule {
@@ -48,7 +43,7 @@ struct sim_provider_group {
 struct ofp4vlan {
     struct hmap_node hmap_node;
     uint32_t vid;
-    switch_handle_t vlan_handle;
+    switch_handle_t vlan_handle;    /* P4 vlan handle */
 };
 
 struct ofbundle {
@@ -66,18 +61,10 @@ struct ofbundle {
     unsigned long *trunks;      /* Bitmap of allowed trunked VLANs */
     bool allow_all_trunks;      /* user did not specify trunks bitmap => allow all vlans */
     struct lacp *lacp;          /* LACP if LACP is enabled, otherwise NULL. */
-    struct bond *bond;          /* Nonnull iff more than one port. */
+    struct bond *bond;          /* Nonnull iff more than one port. Provides hash info and other */
     bool use_priority_tags;     /* Use 802.1p tag for frames in VLAN 0? */
 
-    /* Status. */
-    bool floodable;             /* True if no port has OFPUTIL_PC_NO_FLOOD
-                                 * set. */
-
-    bool is_added_to_sim_ovs;   /* If this bundle is added to ASIC simulating
-                                 * OVS. */
-
-    bool is_vlan_routing_enabled;   /* If VLAN routing is enabled on this
-                                     * bundle. */
+    bool is_vlan_routing_enabled;   /* If VLAN routing is enabled on this bundle. */
     bool is_bridge_bundle;      /* If the bundle is internal for the bridge. */
 
     bool is_lag;                /* lag or just single port */
@@ -155,9 +142,7 @@ struct sim_provider_node {
     struct mbridge *mbridge;
 
     struct ovs_mutex stats_mutex;
-    struct netdev_stats stats OVS_GUARDED;      /* To account packets
-                                                 * generated and consumed in
-                                                 * userspace. */
+    struct netdev_stats stats OVS_GUARDED;      /* All packets rx/tx on a port */
 
     /* Spanning tree. */
     struct stp *stp;
@@ -175,15 +160,9 @@ struct sim_provider_node {
     /* Ports. */
     struct sset ports;          /* Set of standard port names. */
     struct sset ghost_ports;    /* Ports with no datapath port. */
-    struct sset port_poll_set;  /* Queued names for port_poll() reply. */
-    int port_poll_errno;        /* Last errno for port_poll() reply. */
     uint64_t change_seq;        /* Connectivity status changes. */
 
     /* Work queues. */
-    struct guarded_list pins;   /* Contains "struct ofputil_packet_in"s. */
-    struct seq *pins_seq;       /* For notifying 'pins' reception. */
-    uint64_t pins_seqno;
-    unsigned long *vlans_bmp;   /* 4096-bit bitmap of in-use VLANs. */
     unsigned long *vlan_intf_bmp;       /* 4096 bitmap of vlan interfaces */
 
     bool vrf;                   /* Specifies whether specific ofproto instance
@@ -217,14 +196,9 @@ struct ops_nexthop {
     switch_handle_t nhop_handle;
 };
 
-enum { N_TABLES = 255 };
+/* Not used yet by P4 plugin. */
+enum { N_TABLES = 1 };
 enum { TBL_INTERNAL = N_TABLES - 1 };   /* Used for internal hidden rules. */
 
-static void rule_get_stats(struct rule *, uint64_t * packets,
-                           uint64_t * bytes, long long int *used);
-static void bundle_remove(struct ofport *);
-static struct sim_provider_ofport *get_ofp_port(const struct sim_provider_node
-                                                *ofproto, ofp_port_t ofp_port);
-
 extern const struct ofproto_class ofproto_sim_provider_class;
-#endif /* ofproto/ofproto-sim-provider.h */
+#endif /* OFPROTO_P4_SIM_PROVIDER_H */
