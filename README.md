@@ -37,7 +37,16 @@ Apache 2.0 license. For more details refer to [COPYING](http://git.openswitch.ne
 
 How to make changes to P4 pipeline?
 -----------------------------------
-TBD
+To make changes to the P4 pipeline and switchapi -
+* Checkout the ops-switchd-p4switch-plugin in your workspace
+* Make changes to P4 pipeline and switchapi inside switch submodule directory
+* Test your changes
+* Create a fork of the switch.git repository
+* Create a work branch
+* Push your tested changes to the work branch
+* Create pull request for mainters to accept you changes
+* Update the submodule refpoint in the ops-switchd-p4switch-plugin repository
+* Generate gerrit review request for updating the refpoint
 
 What other documents are available?
 -----------------------------------
