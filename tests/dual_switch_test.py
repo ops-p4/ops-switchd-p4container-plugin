@@ -36,7 +36,7 @@ class CustomTopology( Topo ):
         self.sws = sws
         #Add list of hosts
         for h in irange( 1, hsts):
-            host = self.addHost('h%s' % h, ip = '172.17.0.%d/24' % h)
+            host = self.addHost('h%s' % h, ip = '172.17.0.%d/24' % (10 + h))
 
         #Add list of switches
         for s in irange(1, sws):
@@ -46,16 +46,18 @@ class CustomTopology( Topo ):
         for i in irange(1, sws):
             hostname = "h%s" % i
             swname = "s%s" % i
-            self.addLink(hostname, swname, port1 = 1)
+            self.addLink(hostname, swname, port1 = 1, port2 = 1)
+            hostname = "h%s" % (i + 2)
+            self.addLink(hostname, swname, port1 = 1, port2 = 2)
 
         #Connect the switches
         for i in irange(2, sws):
-            self.addLink("s%s" % (i-1), "s%s" % i, port1 = 2, port2 = 2)
+            self.addLink("s%s" % (i-1), "s%s" % i, port1 = 3, port2 = 3)
 
 class twoSwitchTest( OpsVsiTest ):
 
   def setupNet(self):
-    self.net = Mininet(topo=CustomTopology(hsts=2, sws=2,
+    self.net = Mininet(topo=CustomTopology(hsts=4, sws=2,
                                            hopts=self.getHostOpts(),
                                            sopts=self.getSwitchOpts()),
                                            switch=VsiOpenSwitch,
@@ -80,20 +82,41 @@ class twoSwitchTest( OpsVsiTest ):
               switch.cmdCLI("no shutdown")
               switch.cmdCLI("end")
 
-  def config_interface(self, intf, mode, vlan):
-      info("\n###### Configuring Interfaces ######\n")
-      for switch in self.net.switches:
-          if isinstance(switch, VsiOpenSwitch):
-              switch.cmdCLI("configure terminal")
-              switch.cmdCLI("interface %d" % intf)
-              switch.cmdCLI("no routing")
-              if mode == "access":
-                  switch.cmdCLI("vlan access %s" % vlan)
-              elif mode == "trunk":
-                  switch.cmdCLI("vlan trunk allowed %s" % vlan)
-                  switch.cmdCLI("vlan trunk native %s" % vlan)
-              switch.cmdCLI("no shutdown")
-              switch.cmdCLI("end")
+  def config_interface(self, sw, intf, mode, vlan, allowed_vlan="", state=""):
+    info("\n###### Configuring Interfaces ######\n")
+    switch = self.net.getNodeByName(sw)
+    if isinstance(switch, VsiOpenSwitch):
+        switch.cmdCLI("configure terminal")
+        switch.cmdCLI("interface %d" % intf)
+        switch.cmdCLI("no routing")
+        if mode == "access":
+            switch.cmdCLI("vlan access %s" % vlan)
+        elif mode == "trunk":
+            if vlan:
+                switch.cmdCLI("vlan trunk native %s" % vlan)
+            if allowed_vlan:
+              switch.cmdCLI("vlan trunk allowed %s" % allowed_vlan)
+        if state:
+            switch.cmdCLI(state)
+        else:
+            switch.cmdCLI("no shutdown")
+        switch.cmdCLI("end")
+
+  def unconfigure_interface(self, sw, intf, mode, vlan, allowed_vlan=""):
+    info("\n##### Unconfigure Interface Config #####\n")
+    switch = self.net.getNodeByName(sw)
+    if isinstance(switch, VsiOpenSwitch):
+        switch.cmdCLI("configure terminal")
+        switch.cmdCLI("interface %d" % intf)
+        if mode == "access":
+            switch.cmdCLI("no vlan access %s" % vlan)
+        elif mode == "trunk":
+            if vlan:
+                switch.cmdCLI("no vlan trunk native %s" % vlan)
+            if allowed_vlan:
+              switch.cmdCLI("no vlan trunk allowed %s" % allowed_vlan)
+        switch.cmdCLI("shutdown")
+        switch.cmdCLI("end")
 
   def mininet_ping_hosts(self):
     info("\n###### Ping Hosts #####\n")
@@ -102,7 +125,11 @@ class twoSwitchTest( OpsVsiTest ):
     hosts = self.net.hosts
     result = self.net.ping(hosts,30)
 
-  def config_lag_interface(self, sw, lag_intf, mode, vlan, mem_intf_list):
+  def add_switch_link(self, sw1, sw2, port1, port2):
+    self.net.addLink(sw1, sw2, port1 = port1, port2 = port2)
+
+  def config_lag_interface(self, sw, lag_intf, mode, vlan,\
+                           mem_intf_list, allowed_vlan=""):
     info("\n####### Configuring Lag Interface #######\n")
     switch = self.net.getNodeByName(sw)
     if isinstance(switch, VsiOpenSwitch):
@@ -112,53 +139,85 @@ class twoSwitchTest( OpsVsiTest ):
         if mode == "access":
             switch.cmdCLI("vlan access %s" % vlan)
         elif mode == "trunk":
-            switch.cmdCLI("vlan trunk allowed %s" % vlan)
-            switch.cmdCLI("vlan trunk native %s" % vlan)
+            if vlan:
+                switch.cmdCLI("vlan trunk native %s" % vlan)
+            if allowed_vlan:
+                switch.cmdCLI("vlan trunk allowed %s" % allowed_vlan)
         switch.cmdCLI("no shutdown")
         switch.cmdCLI("exit")
         info("\n##### Configuring Lag Members ######\n")
         for intf in mem_intf_list:
+            info("\n##### intf %s #####\n" % intf)
             switch.cmdCLI("interface %d" % intf)
             switch.cmdCLI("lag %d" % lag_intf)
             switch.cmdCLI("no shutdown")
-            switch.cmdCLI("end")
+            switch.cmdCLI("exit")
+        switch.cmdCLI("end")
 
   def mininet_cli(self):
     CLI(self.net)
 
-class Test_example:
+class Test_dual_switch_test:
 
   def setup_class(self):
     # Create the Mininet topology based on mininet.
     info("##### Create Topology #####\n")
-    Test_example.test = twoSwitchTest()
+    Test_dual_switch_test.test = twoSwitchTest()
 
   def test_vlan_add(self):
     info("##### Configure Vlan #####\n")
-    self.test.vlan_add(vlan=100)
+    self.test.vlan_add(vlan=500)
 
   def test_config_interface(self):
-    info("##### Configure Host Interfaces - Access Mode #####\n")
-    self.test.config_interface(intf=1,mode="access",vlan=100)
-    info("##### Configure Switch Interfaces - Trunk Mode #####\n")
-    self.test.config_interface(intf=2,mode="trunk",vlan=100)
+    info("##### Configure S1 Host Interfaces #####\n")
+    self.test.config_interface(sw="s1",intf=1,mode="access",vlan=500)
+    self.test.config_interface(sw="s1",intf=2,mode="trunk",vlan=500)
+    info("##### Configure S1 Switch Interfaces - Trunk Mode #####\n")
+    self.test.config_interface(sw="s1",intf=3,mode="trunk",vlan=500,
+                               allowed_vlan=500)
+
+    info("##### Configure S2 Host Interfaces #####\n")
+    self.test.config_interface(sw="s2",intf=1,mode="access",vlan=500)
+    self.test.config_interface(sw="s2",intf=2,mode="trunk",vlan=500,
+                               allowed_vlan=500)
+    info("##### Configure S2 Switch Interfaces - Trunk Mode #####\n")
+    self.test.config_interface(sw="s2",intf=3,mode="trunk",vlan=500,
+                               allowed_vlan=500)
 
   def test_show_run_1(self):
     self.test.show_running_config()
+
+  '''
+  def test_mininet_cli(self):
+    self.test.mininet_cli()
+  '''
 
   def test_mininet_ping_hosts1(self):
     info("##### Ping Hosts 1 #####\n")
     self.test.mininet_ping_hosts()
 
-  # Test for slow routing between directly connected hosts
-  #def test_mininet_cli(self):
-  #  self.test.mininet_cli()
+  def test_unconfigure_interface(self):
+    info("##### Configure S1 Switch Interfaces - Trunk Mode #####\n")
+    self.test.unconfigure_interface(sw="s1",intf=3,mode="trunk",vlan=500,allowed_vlan=500)
+    self.test.unconfigure_interface(sw="s2",intf=3,mode="trunk",vlan=500,
+                                    allowed_vlan=500)
+
+
+  def test_add_switch_link(self):
+    info("##### Add Switch Link #####\n")
+    self.test.add_switch_link("s1", "s2", 4, 4)
+    self.test.add_switch_link("s1", "s2", 5, 5)
 
   def test_config_lag_interface(self):
     info("##### Configure Lag Interface - Trunk Mode #####\n")
-    self.test.config_lag_interface(sw="s1", lag_intf=1,\
-                                   mode="trunk", vlan="100",\
-                                   mem_intf_list=[2])
+    self.test.config_lag_interface(sw="s1", lag_intf=10,\
+                                   mode="trunk", vlan="500",\
+                                   mem_intf_list=[3, 4, 5],\
+                                   allowed_vlan=500)
+    self.test.config_lag_interface(sw="s2", lag_intf=10,\
+                                   mode="trunk", vlan="500",\
+                                   mem_intf_list=[3, 4, 5],\
+                                   allowed_vlan=500)
 
   def test_show_run_2(self):
     self.test.show_running_config()
@@ -170,7 +229,7 @@ class Test_example:
   def teardown_class(cls):
     # Stop the Docker containers, and
     # mininet topology
-    Test_example.test.net.stop()
+    Test_dual_switch_test.test.net.stop()
 
   def __del__(self):
     del self.test
