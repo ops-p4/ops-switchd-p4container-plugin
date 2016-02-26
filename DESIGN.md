@@ -6,13 +6,13 @@
 - [Description](#description)
 - [Responsibilities](#responsibilities)
 - [Design choices](#design-choices)
-- [Relationship between OpenSwitch and P4 data-plane simulator](#relationship-between-openSwitch-and-P4-data-plane-simulator)
+- [Relationship between OpenSwitch and P4 data-plane simulator](#relationship-between-openswitch-and-p4-dataplane-simulator)
 - [Internal structure](#internal-structure)
 - [netdev simulation provider](#netdev-simulation-provider)
 - [ofproto simulation provider](#ofproto-simulation-provider)
 - [ofproto simulation provider plugin](#ofproto-simulation-provider-plugin)
-- [SwtichApi](#SwtichApi)
-- [PD_Api](#PD_Api)
+- [SwtichApi](#swtichapi)
+- [PD_Api](#pd_api)
 - [References](#references)
 
 ## Description
@@ -47,7 +47,7 @@ The design selected a P4 simulator with switch.p4 as a forwarding plane as it pr
 The Docker/Mininet framework was selected because the virtual machine based simulation proved too difficult to deploy and manage. Docker provides a lightweight scalable virtualization, which is critical to regression testing and continuous
 integration. Mininet provides a simple and powerful framework to develop networking tests using Python scripts which execute either in simulation or on real hardware.
 
-## Relationship between OpenSwitch and P4 data-plane simulator
+## Relationship between OpenSwitch and P4 dataplane simulator
 
 ```ditaa
 +---------------------------------------------------------------------------+
