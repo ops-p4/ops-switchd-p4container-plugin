@@ -673,9 +673,14 @@ p4_switch_interface_port_to_lag (struct ofbundle *bundle)
 
             p4vlan = p4vlan_lookup(ofproto, b);
 
+            if (!p4vlan) {
+                continue;
+            }
+
             /* switch the if_handle to re-use in create function */
             bundle->if_handle = lag_if_handle;
-            if (p4vlan && bundle->port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
+            if (p4vlan->vid == bundle->vlan &&
+                    bundle->port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
                 switch_api_interface_native_vlan_set(bundle->if_handle, p4vlan->vlan_handle);
             }
             p4_switch_vlan_port_create(bundle, b);
