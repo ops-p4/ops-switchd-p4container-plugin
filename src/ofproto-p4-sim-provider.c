@@ -158,7 +158,7 @@ dealloc(struct ofproto *ofproto_)
 static int
 p4_ofproto_install_l3_acl()
 {
-    switch_status_t status = SWITCH_STATUS_SUCCESS;
+    switch_status_t rc = SWITCH_STATUS_SUCCESS;
     switch_api_hostif_rcode_info_t api_rcode_info;
 
     memset(&api_rcode_info, 0x0, sizeof(switch_api_hostif_rcode_info_t));
@@ -168,35 +168,39 @@ p4_ofproto_install_l3_acl()
     api_rcode_info.action = SWITCH_ACL_ACTION_COPY_TO_CPU;
 
     api_rcode_info.reason_code = SWITCH_HOSTIF_REASON_CODE_ARP_REQUEST;
-    status = switch_api_hostif_reason_code_create(
+    rc = switch_api_hostif_reason_code_create(
                              0x0,
                              &api_rcode_info);
-    if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_ERR("failed to create acl for arp request");
+    if (rc != SWITCH_STATUS_SUCCESS) {
+        VLOG_ERR("failed to create acl for arp request : rc %d",
+            rc);
     }
 
     api_rcode_info.reason_code = SWITCH_HOSTIF_REASON_CODE_ARP_RESPONSE;
-    status = switch_api_hostif_reason_code_create(
+    rc = switch_api_hostif_reason_code_create(
                              0x0,
                              &api_rcode_info);
-    if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_ERR("failed to create acl for arp response");
+    if (rc != SWITCH_STATUS_SUCCESS) {
+        VLOG_ERR("failed to create acl for arp response : rc %d",
+            rc);
     }
 
     api_rcode_info.reason_code = SWITCH_HOSTIF_REASON_CODE_OSPF;
-    status = switch_api_hostif_reason_code_create(
+    rc = switch_api_hostif_reason_code_create(
                              0x0,
                              &api_rcode_info);
-    if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_ERR("failed to create acl for ospf");
+    if (rc != SWITCH_STATUS_SUCCESS) {
+        VLOG_ERR("failed to create acl for ospf : rc %d",
+            rc);
     }
 
     api_rcode_info.reason_code = SWITCH_HOSTIF_REASON_CODE_OSPFV6;
-    status = switch_api_hostif_reason_code_create(
+    rc = switch_api_hostif_reason_code_create(
                              0x0,
                              &api_rcode_info);
-    if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_ERR("failed to create acl for ospfv6");
+    if (rc != SWITCH_STATUS_SUCCESS) {
+        VLOG_ERR("failed to create acl for ospfv6 : rc %d",
+            rc);
     }
     return 0;
 }
@@ -399,22 +403,22 @@ p4_lag_port_update (switch_handle_t lag_handle,
     int32_t device = 0;
     switch_handle_t port_handle;
     switch_port_t port_id;
-    switch_status_t ret_val = 0;
+    switch_status_t rc = 0;
 
     netdev_get_device_port_handle(port->up.netdev, &device,
                            &port_handle);
     VLOG_INFO("p4_lag_port_update: lag 0x%x port 0x%x add %d",
                     lag_handle, port_handle, add);
     if (add) {
-        ret_val = switch_api_lag_member_add(0, lag_handle, SWITCH_API_DIRECTION_BOTH,
+        rc = switch_api_lag_member_add(0, lag_handle, SWITCH_API_DIRECTION_BOTH,
                                     handle_to_id(port_handle));
     } else {
-        ret_val = switch_api_lag_member_delete(0, lag_handle, SWITCH_API_DIRECTION_BOTH,
+        rc = switch_api_lag_member_delete(0, lag_handle, SWITCH_API_DIRECTION_BOTH,
                                     handle_to_id(port_handle));
     }
-    if (ret_val) {
-        VLOG_ERR("p4_lag_port_update failed for lag 0x%x port 0x%x add %d",
-                    lag_handle, port_handle, add);
+    if (rc) {
+        VLOG_ERR("p4_lag_port_update failed for lag 0x%x port 0x%x add %d : rc %d",
+                    lag_handle, port_handle, add, rc);
     }
 }
 
@@ -514,6 +518,7 @@ p4_switch_vlan_port_create (struct ofbundle *bundle, int32_t vlan)
 {
     struct ofp4vlan *p4vlan;
     struct sim_provider_node *ofproto = bundle->ofproto;
+    switch_status_t rc = 0;
 
     p4vlan = p4vlan_lookup(ofproto, vlan);
     if (p4vlan && bundle->if_handle) {
@@ -523,8 +528,8 @@ p4_switch_vlan_port_create (struct ofbundle *bundle, int32_t vlan)
         vlan_port.tagging_mode = bundle->tag_mode;
         VLOG_INFO("switch_api_vlan_ports_add - vlan %d, hdl 0x%x, if_hdl 0x%x",
                     p4vlan->vid, p4vlan->vlan_handle, vlan_port.handle);
-        if (switch_api_vlan_ports_add(0, p4vlan->vlan_handle, 1, &vlan_port)) {
-            VLOG_ERR("switch_api_vlan_ports_add - failed");
+        if (rc = switch_api_vlan_ports_add(0, p4vlan->vlan_handle, 1, &vlan_port)) {
+            VLOG_ERR("switch_api_vlan_ports_add - failed : rc %d", rc);
             return -1;
         }
         return 0;
@@ -537,6 +542,7 @@ p4_switch_vlan_port_delete (struct ofbundle *bundle, int32_t vlan)
 {
     struct ofp4vlan *p4vlan;
     struct sim_provider_node *ofproto = bundle->ofproto;
+    switch_status_t rc = 0;
 
     p4vlan = p4vlan_lookup(ofproto, vlan);
     if (p4vlan && bundle->if_handle) {
@@ -546,8 +552,9 @@ p4_switch_vlan_port_delete (struct ofbundle *bundle, int32_t vlan)
         vlan_port.tagging_mode = bundle->tag_mode;
         VLOG_INFO("switch_api_vlan_ports_remove - vlan %d, hdl 0x%x, port hdl 0x%x",
                     p4vlan->vid, p4vlan->vlan_handle, vlan_port.handle);
-        if (switch_api_vlan_ports_remove(0, p4vlan->vlan_handle, 1, &vlan_port)) {
-            VLOG_ERR("switch_api_vlan_ports_remove - failed");
+        if (rc =
+            switch_api_vlan_ports_remove(0, p4vlan->vlan_handle, 1, &vlan_port)) {
+            VLOG_ERR("switch_api_vlan_ports_remove - failed : rc %d", rc);
         }
     }
     return;
@@ -673,9 +680,14 @@ p4_switch_interface_port_to_lag (struct ofbundle *bundle)
 
             p4vlan = p4vlan_lookup(ofproto, b);
 
+            if (!p4vlan) {
+                continue;
+            }
+
             /* switch the if_handle to re-use in create function */
             bundle->if_handle = lag_if_handle;
-            if (p4vlan && bundle->port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
+            if (p4vlan->vid == bundle->vlan &&
+                    bundle->port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
                 switch_api_interface_native_vlan_set(bundle->if_handle, p4vlan->vlan_handle);
             }
             p4_switch_vlan_port_create(bundle, b);
@@ -699,7 +711,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     char cmd_str[MAX_CMD_LEN];
     struct ofbundle *bundle;
     unsigned long *trunks = NULL;
-    int ret_val = 0;
+    int rc = 0;
     int32_t new_port_type = 0;
     int32_t tag_mode = 0;
 
@@ -929,7 +941,7 @@ found:     ;
         VLOG_ERR("un-supported interface type");
         return EINVAL;
     }
-    return ret_val;
+    return rc;
 }
 
 static int
@@ -970,6 +982,7 @@ p4_bundles_vlan_update (struct sim_provider_node *ofproto, struct ofp4vlan *p4vl
     int max_bundles = hmap_count(&ofproto->bundles);
     int l2_bundles = 0;
     switch_vlan_port_t *vlan_port;
+    switch_status_t rc = 0;
 
     vlan_port = xmalloc(max_bundles * sizeof(switch_vlan_port_t));
     ovs_assert(vlan_port);
@@ -1011,14 +1024,16 @@ p4_bundles_vlan_update (struct sim_provider_node *ofproto, struct ofp4vlan *p4vl
     if (add) {
         VLOG_INFO("switch_api_vlan_ports_add vlan %d hdl 0x%x, n_ports %d",
                         p4vlan->vid, p4vlan->vlan_handle, l2_bundles);
-        if (switch_api_vlan_ports_add(0, p4vlan->vlan_handle, l2_bundles, vlan_port)) {
-            VLOG_ERR("switch_api_vlan_ports_add - failed");
+        if (rc =
+            switch_api_vlan_ports_add(0, p4vlan->vlan_handle, l2_bundles, vlan_port)) {
+            VLOG_ERR("switch_api_vlan_ports_add - failed %d", rc);
         }
     } else {
         VLOG_INFO("switch_api_vlan_ports_remove vlan_hdl 0x%x, n_ports %d",
                         p4vlan->vlan_handle, l2_bundles);
-        if (switch_api_vlan_ports_remove(0, p4vlan->vlan_handle, l2_bundles, vlan_port)) {
-            VLOG_ERR("switch_api_vlan_ports_remove - failed");
+        if (rc =
+            switch_api_vlan_ports_remove(0, p4vlan->vlan_handle, l2_bundles, vlan_port)) {
+            VLOG_ERR("switch_api_vlan_ports_remove - failed %d", rc);
         }
     }
     free(vlan_port);
