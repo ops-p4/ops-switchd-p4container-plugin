@@ -35,4 +35,7 @@ extern int netdev_get_device_port_handle(struct netdev *netdev_,
 extern int netdev_get_port_rmac_handle(struct netdev *netdev_,
                 switch_handle_t *rmac_handle);
 
-#endif /* netdev-p4-sim.h */
+extern int
+netdev_sim_get_etheraddr(const struct netdev *netdev,
+                         struct eth_addr *mac);
+#endif /* netdev-sim.h */
