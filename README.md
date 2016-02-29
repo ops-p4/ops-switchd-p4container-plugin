@@ -54,3 +54,38 @@ For the high level design of ops-switchd-p4plugin-plugin, refer to [DESIGN.md](h
 For the current list of contributors and maintainers, refer to [AUTHORS.md](http://git.openswitch.net/cgit/openswitch/ops-switchd-p4plugin-plugin/tree/AUTHORS)
 
 For general information about OpenSwitch project refer to http://www.openswitch.net.
+
+
+Supported Features:
+-------------------
+The switch.p4 is a feature-rich implementation of a packet processing pipeline.
+Only a subset of those features is exposed in the openswitch environment at this time.
+Following features are avaialable in open-switch enviroment.
+
+Layer2 features:
+- Layer 2 access and trunk ports
+- VLANs
+- L2 switching, per-VLAN flooding
+- L2 LAG interfaces
+- LACP
+- LLDP
+- MAC learning and aging within the plugin
+
+L3 features:
+- L3 interfaces
+- L3 LAG interfaces
+- L3 unicast static and dynamic routing (default VRF)
+- ECMP support
+
+TODO List:
+----------
+This is a list of things that belong to supported features, but not done yet.
+Look for XXX or TODO comments in the code for detail information.
+- LAG hash selection
+- ECMP hash selection
+- Expose learnt MACs to upport layers
+- Support native-tagged modes on a trunk port, currently only native-untagged is supported
+- Make-before-brake logic should be used when converting a single port to LAG
+- VLAN interface
+- Sub-interfaces
+- loopback interfaces
