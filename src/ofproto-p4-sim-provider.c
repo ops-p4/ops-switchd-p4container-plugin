@@ -1375,7 +1375,7 @@ set_frag_handling(struct ofproto *ofproto_ OVS_UNUSED,
 
 static enum ofperr
 packet_out(struct ofproto *ofproto_ OVS_UNUSED,
-           struct ofpbuf *packet OVS_UNUSED,
+           struct dp_packet *packet OVS_UNUSED,
            const struct flow *flow OVS_UNUSED,
            const struct ofpact *ofpacts OVS_UNUSED,
            size_t ofpacts_len OVS_UNUSED)
