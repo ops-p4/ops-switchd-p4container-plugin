@@ -1,5 +1,7 @@
-# Copyright (C) 2015 Hewlett Packard Enterprise Development LP
-# All Rights Reserved.
+#!/usr/bin/env python
+
+# (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+# (c) Copyright 2016 Barefoot Networks Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -12,16 +14,6 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-# This script is used as a virtual test setup. By using this script,
-# or modifying it as required, developers can quickly build topologies
-# and test their changes on their VMs.
-# Pre-requisites:
-# 1. Checkout the ops-vsi repo.
-# 2. Run 'make devenv_ct_init'.
-# 3. Export the docker image of the switch from your build directory.
-
-# To run this file, we have to point to the native python inside the sandbox.
-# ex: /usr/bin/sudo <SANDBOX>/build/tmp/sysroots/x86_64-linux/usr/bin/py.test -s dual_switch_test.py
 
 import os
 import time
