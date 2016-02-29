@@ -126,6 +126,7 @@ class twoSwitchTest( OpsVsiTest ):
     time.sleep(30)
     hosts = self.net.hosts
     result = self.net.ping(hosts,30)
+    return int(result)
 
   # add link between switches
   def add_switch_link(self, sw1, sw2, port1, port2):
@@ -196,9 +197,9 @@ class Test_dual_switch_test:
     self.test.mininet_cli()
   '''
 
-  def test_mininet_ping_hosts1(self):
-    info("##### Ping Hosts 1 #####\n")
-    self.test.mininet_ping_hosts()
+  def test_mininet_ping_hosts_trunk(self):
+    info("##### Ping Hosts, Switch Trunk #####\n")
+    assert(self.test.mininet_ping_hosts())
 
   def test_unconfigure_interface(self):
     info("##### Configure S1 Switch Interfaces - Trunk Mode #####\n")
@@ -226,9 +227,9 @@ class Test_dual_switch_test:
   def test_show_run_2(self):
     self.test.show_running_config()
 
-  def test_mininet_ping_hosts2(self):
-    info("##### Ping Hosts 2 #####\n")
-    self.test.mininet_ping_hosts()
+  def test_mininet_ping_hosts_lag(self):
+    info("##### Ping Hosts, Switch Lag Group  #####\n")
+    assert(self.test.mininet_ping_hosts())
 
   def teardown_class(cls):
     # Stop the Docker containers, and
