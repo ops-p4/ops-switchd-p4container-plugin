@@ -52,10 +52,15 @@ class CustomTopology( Topo ):
 
         #Connect the switches
         for i in irange(2, sws):
-            self.addLink("s%s" % (i-1), "s%s" % i, port1 = 3, port2 = 3)
+            self.addLink("s%s" % (i-1), "s%s" % i, port1 = (i+1), port2 = (i+1))
 
 class twoSwitchTest( OpsVsiTest ):
 
+  # Topology
+  # 4 hosts, 2 switches
+  # 1, 3 hosts connected to s1
+  # 2, 4 hosts connected to s2
+  # s1 is connected s2
   def setupNet(self):
     self.net = Mininet(topo=CustomTopology(hsts=4, sws=2,
                                            hopts=self.getHostOpts(),
@@ -65,6 +70,7 @@ class twoSwitchTest( OpsVsiTest ):
                                            link=OpsVsiLink, controller=None,
                                            build=True)
 
+  # show running config on the switches
   def show_running_config(self):
       info("\n###### Show Running Config #####\n")
       for switch in self.net.switches:
@@ -73,6 +79,7 @@ class twoSwitchTest( OpsVsiTest ):
               runconf = switch.cmdCLI("show running-config")
               info(runconf + "\n")
 
+  # vlan add method
   def vlan_add(self, vlan = 10):
       info("\n###### Configuring Vlan ######\n")
       for switch in self.net.switches:
@@ -82,6 +89,7 @@ class twoSwitchTest( OpsVsiTest ):
               switch.cmdCLI("no shutdown")
               switch.cmdCLI("end")
 
+  # configure access or trunk interfaces
   def config_interface(self, sw, intf, mode, vlan, allowed_vlan="", state=""):
     info("\n###### Configuring Interfaces ######\n")
     switch = self.net.getNodeByName(sw)
@@ -102,6 +110,7 @@ class twoSwitchTest( OpsVsiTest ):
             switch.cmdCLI("no shutdown")
         switch.cmdCLI("end")
 
+  # unconfigure interfaces
   def unconfigure_interface(self, sw, intf, mode, vlan, allowed_vlan=""):
     info("\n##### Unconfigure Interface Config #####\n")
     switch = self.net.getNodeByName(sw)
@@ -118,6 +127,7 @@ class twoSwitchTest( OpsVsiTest ):
         switch.cmdCLI("shutdown")
         switch.cmdCLI("end")
 
+  # ping the hosts
   def mininet_ping_hosts(self):
     info("\n###### Ping Hosts #####\n")
     info("Sleep for 30 seconds for system to be up\n")
@@ -125,9 +135,11 @@ class twoSwitchTest( OpsVsiTest ):
     hosts = self.net.hosts
     result = self.net.ping(hosts,30)
 
+  # add link between switches
   def add_switch_link(self, sw1, sw2, port1, port2):
     self.net.addLink(sw1, sw2, port1 = port1, port2 = port2)
 
+  # configure lag interface
   def config_lag_interface(self, sw, lag_intf, mode, vlan,\
                            mem_intf_list, allowed_vlan=""):
     info("\n####### Configuring Lag Interface #######\n")
