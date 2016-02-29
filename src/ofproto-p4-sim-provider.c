@@ -208,7 +208,37 @@ p4_ofproto_install_l3_acl()
 static int
 p4_ofproto_uninstall_l3_acl()
 {
-    /* TODO */
+    switch_status_t status = SWITCH_STATUS_SUCCESS;
+
+    status = switch_api_hostif_reason_code_delete(
+                             0x0,
+                             SWITCH_HOSTIF_REASON_CODE_ARP_REQUEST);
+    if (status != SWITCH_STATUS_SUCCESS) {
+        VLOG_ERR("failed to create acl for arp request");
+    }
+
+    status = switch_api_hostif_reason_code_delete(
+                             0x0,
+                             SWITCH_HOSTIF_REASON_CODE_ARP_RESPONSE);
+    if (status != SWITCH_STATUS_SUCCESS) {
+        VLOG_ERR("failed to create acl for arp response");
+    }
+
+    status = switch_api_hostif_reason_code_delete(
+                             0x0,
+                             SWITCH_HOSTIF_REASON_CODE_OSPF);
+
+    if (status != SWITCH_STATUS_SUCCESS) {
+        VLOG_ERR("failed to create acl for ospf");
+    }
+
+    status = switch_api_hostif_reason_code_delete(
+                             0x0,
+                             SWITCH_HOSTIF_REASON_CODE_OSPFV6);
+    if (status != SWITCH_STATUS_SUCCESS) {
+        VLOG_ERR("failed to create acl for ospfv6");
+    }
+
     return 0;
 }
 
@@ -251,6 +281,7 @@ construct(struct ofproto *ofproto_)
         ofproto->vrf = true;
         VLOG_DBG("VRF name %s\n", ofproto_->name);
         ofproto->vrf_handle = switch_api_vrf_create(0, 1);
+        ofproto->rmac_handle = SWITCH_API_INVALID_HANDLE;
         p4_ofproto_install_l3_acl();
         hmap_init(&l3_route_table);
     }
@@ -264,10 +295,33 @@ static void
 destruct(struct ofproto *ofproto_ OVS_UNUSED)
 {
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
+    switch_status_t status = SWITCH_STATUS_SUCCESS;
     char ovs_delbr[80];
 
     if (ofproto->vrf == true) {
-        /* XXX swithapi for vrf cleanup */
+        if (ofproto->rmac_handle != SWITCH_API_INVALID_HANDLE) {
+            status = switch_api_router_mac_delete(
+                             0x0,
+                             ofproto->rmac_handle,
+                             &ofproto->mac);
+            if (status != SWITCH_STATUS_SUCCESS) {
+                VLOG_ERR("failed to delete rmac address");
+            }
+
+            status = switch_api_router_mac_group_delete(0x0, ofproto->rmac_handle);
+            if (status != SWITCH_STATUS_SUCCESS) {
+                VLOG_ERR("failed to delete rmac address");
+            }
+        }
+
+        struct ops_route *ops_routep = NULL;
+        HMAP_FOR_EACH(ops_routep, node, &l3_route_table) {
+            hmap_destroy(&ops_routep->nexthops);
+        }
+
+        hmap_destroy(&l3_route_table);
+
+        p4_ofproto_uninstall_l3_acl();
     }
 
     hmap_remove(&all_sim_provider_nodes, &ofproto->all_sim_provider_node);
@@ -598,7 +652,30 @@ p4_switch_interface_create (struct ofbundle *bundle)
         i_info.ipv6_unicast_enabled = TRUE;
         i_info.u.port_lag_handle = bundle->port_lag_handle;
         i_info.vrf_handle = ofproto->vrf_handle;
-        netdev_get_port_rmac_handle(port->up.netdev, &i_info.rmac_handle);
+
+        if (ofproto->vrf) {
+            /*
+             * create the rmac once for the system when the fist l3
+             * interface is created
+             */
+            if (ofproto->rmac_handle == SWITCH_API_INVALID_HANDLE) {
+                struct eth_addr mac;
+                switch_status_t status = SWITCH_STATUS_SUCCESS;
+                netdev_sim_get_etheraddr(port->up.netdev, &mac);
+                memcpy(&ofproto->mac.mac_addr, mac.ea, ETH_ADDR_LEN);
+                ofproto->rmac_handle = switch_api_router_mac_group_create(0x0);
+                ovs_assert(ofproto->rmac_handle != SWITCH_API_INVALID_HANDLE);
+                status = switch_api_router_mac_add(
+                             0x0,
+                             ofproto->rmac_handle,
+                             &ofproto->mac);
+                if (status != SWITCH_STATUS_SUCCESS) {
+                    VLOG_ERR("failed to create system router mac");
+                    return;
+                }
+            }
+        }
+        i_info.rmac_handle = ofproto->rmac_handle;
     } else {
         ovs_assert(0);
     }
@@ -1969,6 +2046,22 @@ l3_route_hash_delete(
     free(ops_routep);
 }
 
+switch_handle_t
+l3_nexthop_ofroute_get(struct ofproto_route_nexthop *nh)
+{
+    switch_handle_t nhop_handle = 0;
+
+    if (nh->state == OFPROTO_NH_RESOLVED) {
+        nhop_handle = id_to_handle(
+                           SWITCH_HANDLE_TYPE_NHOP,
+                           nh->l3_egress_id);
+    } else {
+        nhop_handle = l3_route_nhop_glean_get();
+    }
+
+    return nhop_handle;
+}
+
 static int
 l3_dump_route_entry(const struct ofproto *ofproto_,
                    struct ofproto_route *of_routep,
@@ -1978,31 +2071,30 @@ l3_dump_route_entry(const struct ofproto *ofproto_,
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
     int index = 0;
 
-    VLOG_DBG("vrf %lx", ofproto->vrf_handle);
-    VLOG_DBG("ip address %s", of_routep->prefix);
-    VLOG_DBG("n_nexthops %d", of_routep->n_nexthops);
+    VLOG_INFO("vrf %lx", ofproto->vrf_handle);
+    VLOG_INFO("ip address %s", of_routep->prefix);
+    VLOG_INFO("n_nexthops %d", of_routep->n_nexthops);
 
     for (index = 0; index < of_routep->n_nexthops; index++) {
         nh = &of_routep->nexthops[index];
-        VLOG_DBG("nhop %d", index + 1);
-        VLOG_DBG("id %s", nh->id);
-        VLOG_DBG("type %s", nh->type == OFPROTO_NH_PORT ? "port" : "ip");
-        VLOG_DBG("state %s", nh->state == OFPROTO_NH_RESOLVED ? "resolved" : "unresolved");
-        VLOG_DBG("l3_egress_id %d", nh->l3_egress_id);
+        VLOG_INFO("nhop %d", index + 1);
+        VLOG_INFO("id %s", nh->id);
+        VLOG_INFO("type %s", nh->type == OFPROTO_NH_PORT ? "port" : "ip");
+        VLOG_INFO("state %s", nh->state == OFPROTO_NH_RESOLVED ? "resolved" : "unresolved");
+        VLOG_INFO("l3_egress_id %d", nh->l3_egress_id);
     }
     return 0;
 }
 
 static int
-l3_ecmp_members_add(
-        struct ops_route *ops_routep,
-        bool create_ecmp)
+l3_ecmp_create(
+        struct ops_route *ops_routep)
 {
-    switch_status_t status = SWITCH_STATUS_SUCCESS;
     switch_handle_t ecmp_handle = 0;
     switch_handle_t nhop_handle[MAX_NEXTHOPS_PER_ROUTE];
     uint16_t nh_count = 0;
     struct ops_nexthop *ops_nh = NULL;
+    int i = 0;
 
     HMAP_FOR_EACH(ops_nh, node, &ops_routep->nexthops) {
         nhop_handle[nh_count++] = ops_nh->nhop_handle;
@@ -2011,36 +2103,31 @@ l3_ecmp_members_add(
         }
     }
 
-    if (create_ecmp) {
+    VLOG_INFO("nhop_count for ecmp %d", nh_count);
+    for (i = 0; i < nh_count; i++) {
+        VLOG_INFO("nhop %d: %lx", i, nhop_handle[i]);
+    }
+
+    if (nh_count) {
         ecmp_handle = switch_api_ecmp_create_with_members(
-                             0x0,
-                             nh_count,
-                             nhop_handle);
+                                 0x0,
+                                 nh_count,
+                                 nhop_handle);
         if (ecmp_handle == SWITCH_API_INVALID_HANDLE) {
             return EINVAL;
         }
 
         ops_routep->handle = ecmp_handle;
-        VLOG_INFO("ecmp handle allocated %lx", ecmp_handle);
-    } else {
-        status = switch_api_ecmp_member_add(
-                             0x0,
-                             ops_routep->handle,
-                             nh_count,
-                             nhop_handle);
-        if (status != SWITCH_STATUS_SUCCESS) {
-            VLOG_ERR("failed to add ecmp members");
-            return EINVAL;
-        }
+        ops_routep->ecmp_enabled = true;
+        return 0;
     }
 
-    return 0;
+    return EINVAL;
 }
 
 static int
-l3_ecmp_members_delete(
-        struct ops_route *ops_routep,
-        bool delete_ecmp)
+l3_ecmp_delete(
+        struct ops_route *ops_routep)
 {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     switch_handle_t nhop_handle[MAX_NEXTHOPS_PER_ROUTE];
@@ -2048,31 +2135,37 @@ l3_ecmp_members_delete(
     uint16_t nh_count = 0;
     struct ops_nexthop *ops_nh = NULL;
 
+    if (!ops_routep->ecmp_enabled) {
+        return 0;
+    }
+
     HMAP_FOR_EACH(ops_nh, node, &ops_routep->nexthops) {
         nhop_handle[nh_count++] = ops_nh->nhop_handle;
     }
 
     ecmp_handle = ops_routep->handle;
-    assert(ecmp_handle != 0);
 
-    status = switch_api_ecmp_member_delete(
+    if (nh_count != 0) {
+        status = switch_api_ecmp_member_delete(
                              0x0,
                              ecmp_handle,
                              nh_count,
                              nhop_handle);
-    if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_ERR("failed to delete ecmp members");
-    }
-
-    if (delete_ecmp) {
-        VLOG_INFO("ecmp handle deleted %lx", ecmp_handle);
-        status = switch_api_ecmp_delete(0x0, ecmp_handle);
         if (status != SWITCH_STATUS_SUCCESS) {
             VLOG_ERR("failed to delete ecmp members");
-            return EINVAL;
         }
-        ops_routep->handle = 0;
     }
+
+    status = switch_api_ecmp_delete(0x0, ecmp_handle);
+    if (status != SWITCH_STATUS_SUCCESS) {
+        VLOG_ERR("failed to delete ecmp");
+        return EINVAL;
+    }
+
+    VLOG_DBG("ecmp handle deleted %lx", ecmp_handle);
+
+    ops_routep->handle = 0;
+    ops_routep->ecmp_enabled = false;
     return 0;
 }
 
@@ -2091,7 +2184,7 @@ l3_route_entry_new(
     ops_routep = l3_route_hash_insert(vrf_handle, of_routep);
 
     if (ops_routep->n_nexthops > 1) {
-        rc = l3_ecmp_members_add(ops_routep, true);
+        rc = l3_ecmp_create(ops_routep);
         if (rc != 0) {
             VLOG_ERR("failed to create ecmp members");
             return rc;
@@ -2119,32 +2212,73 @@ l3_route_entry_new(
 }
 
 static int
-l3_route_nexthops_update_count_get(
+l3_ecmp_members_update(
         struct ofproto_route *of_routep,
-        struct ops_route *ops_routep,
-        int *total_n_nexthops)
+        struct ops_route *ops_routep)
 {
+    struct ofproto_route_nexthop *of_nh = NULL;
+    struct ops_nexthop *nh = NULL;
+    switch_handle_t add_nh[MAX_NEXTHOPS_PER_ROUTE];
+    switch_handle_t rem_nh[MAX_NEXTHOPS_PER_ROUTE];
+    int add_nh_count = 0;
+    int rem_nh_count = 0;
+    switch_handle_t of_nhop_handle = 0;
+    switch_handle_t nhop_handle = 0;
     int i = 0;
-    struct ops_nexthop* nh;
-    struct ofproto_route_nexthop *of_nh;
-    int new_entries = 0;
+    switch_status_t status = SWITCH_STATUS_SUCCESS;
 
-    if (!of_routep || !ops_routep) {
-        return EINVAL;
-    }
+    ovs_assert(ops_routep->ecmp_enabled == true);
 
     for (i = 0; i < of_routep->n_nexthops; i++) {
         of_nh = &of_routep->nexthops[i];
         nh = l3_nexthop_hash_lookup(ops_routep, of_nh);
+        of_nhop_handle = l3_nexthop_ofroute_get(of_nh);
         if (!nh) {
-            new_entries++;
+            if (add_nh_count < MAX_NEXTHOPS_PER_ROUTE) {
+                add_nh[add_nh_count++] = of_nhop_handle;
+            }
+        } else {
+            nhop_handle = nh->nhop_handle;
+            if (nhop_handle != of_nhop_handle) {
+                if (rem_nh_count < MAX_NEXTHOPS_PER_ROUTE &&
+                    add_nh_count < MAX_NEXTHOPS_PER_ROUTE) {
+                    rem_nh[rem_nh_count++] = nhop_handle;
+                    add_nh[add_nh_count++] = of_nhop_handle;
+                }
+            }
         }
     }
 
-    *total_n_nexthops = new_entries + ops_routep->n_nexthops;
-    VLOG_INFO("total nexthops %d", *total_n_nexthops);
+    if (add_nh_count) {
+        for (i = 0; i < add_nh_count; i++) {
+            VLOG_INFO("nhop %d: %lx", i, add_nh[i]);
+        }
 
-    return 0;
+        status = switch_api_ecmp_member_add(
+                             0x0,
+                             ops_routep->handle,
+                             add_nh_count,
+                             add_nh);
+        if (status != SWITCH_STATUS_SUCCESS) {
+            VLOG_ERR("failed to add ecmp members");
+        }
+    }
+
+    if (rem_nh_count) {
+        for (i = 0; i < rem_nh_count; i++) {
+            VLOG_INFO("nhop %d: %lx", i, rem_nh[i]);
+        }
+        status = switch_api_ecmp_member_delete(
+                             0x0,
+                             ops_routep->handle,
+                             rem_nh_count,
+                             rem_nh);
+        if (status != SWITCH_STATUS_SUCCESS) {
+            VLOG_ERR("failed to remove ecmp members");
+        }
+    }
+
+    VLOG_INFO("route updated with ecmp handle %lx", ops_routep->handle);
 }
 
 static int
@@ -2155,72 +2289,76 @@ l3_route_entry_update(
         struct ops_route *ops_routep)
 {
     switch_handle_t handle = 0;
+    struct ofproto_route_nexthop *of_nh = NULL;
     struct ops_nexthop *ops_nh = NULL;
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     int rc = 0;
-    int total_n_nexthops = 0;
+    int new_nexthops = 0;
+    int total_nexthops = 0;
+    int i = 0;
 
-    assert(of_routep && ops_routep);
+    ovs_assert(of_routep && ops_routep);
 
-    l3_route_nexthops_update_count_get(of_routep, ops_routep, &total_n_nexthops);
+    for (i = 0; i < of_routep->n_nexthops; i++) {
+        of_nh = &of_routep->nexthops[i];
+        ops_nh = l3_nexthop_hash_lookup(ops_routep, of_nh);
+        if (!ops_nh) {
+            new_nexthops++;
+        }
+    }
 
-    /* non-ecmp route to non-ecmp route */
-    if (total_n_nexthops <= 1 && ops_routep->n_nexthops <= 1) {
-        l3_route_hash_update(vrf_handle, of_routep, ops_routep, false);
-        HMAP_FOR_EACH(ops_nh, node, &ops_routep->nexthops) {
-            handle = ops_nh->nhop_handle;
-        }
-    /* ecmp route to non-ecmp route */
-    } else if (total_n_nexthops <= 1 && ops_routep->n_nexthops > 1) {
-        l3_route_hash_update(vrf_handle, of_routep, ops_routep, false);
-        rc = l3_ecmp_members_delete(ops_routep, true);
-        if (rc == EINVAL) {
-            VLOG_ERR("P4: route update failed");
-            return rc;
-        }
-        HMAP_FOR_EACH(ops_nh, node, &ops_routep->nexthops) {
-            handle = ops_nh->nhop_handle;
-        }
-    /* non-ecmp route to ecmp route */
-    } else if (total_n_nexthops > 1 && ops_routep->n_nexthops <= 1) {
-        l3_route_hash_update(vrf_handle, of_routep, ops_routep, false);
-        rc = l3_ecmp_members_add(ops_routep, true);
-        if (rc == EINVAL) {
-            VLOG_ERR("P4: route update failed");
-            return rc;
-        }
-        handle = ops_routep->handle;
-    /* ecmp route to ecmp route */
-    } else {
+    total_nexthops = ops_routep->n_nexthops + new_nexthops;
+
+    if (total_nexthops <= 1) {
         /*
-         * There should be a better way of doing this.
-         * Add an api in switchapi which replaces old
-         * nhop handles with new ones.
+         * non-ecmp update
          */
-        rc = l3_ecmp_members_delete(ops_routep, false);
+        l3_route_hash_update(vrf_handle, of_routep, ops_routep, false);
+        HMAP_FOR_EACH(ops_nh, node, &ops_routep->nexthops) {
+            handle = ops_nh->nhop_handle;
+        }
+        status = switch_api_l3_route_add(
+                                 0x0,
+                                 vrf_handle,
+                                 ip_address,
+                                 handle);
+        if (status != SWITCH_STATUS_SUCCESS) {
+            VLOG_ERR("failed to add update route");
+            return EINVAL;
+        }
+    } else if (total_nexthops > 1 && ops_routep->n_nexthops <= 1) {
+        /* non-ecmp route to ecmp route
+         * 1. update the hash to new set of nexthops
+         * 2. create ecmp object and members with new nexthops
+         * 3. update route with ecmp handle
+         */
+        l3_route_hash_update(vrf_handle, of_routep, ops_routep, false);
+        rc = l3_ecmp_create(ops_routep);
+        if (rc == EINVAL) {
+            VLOG_ERR("failed to create ecmp");
+            return rc;
+        }
+        handle = ops_routep->handle;
+        status = switch_api_l3_route_add(
+                                 0x0,
+                                 vrf_handle,
+                                 ip_address,
+                                 handle);
+        if (status != SWITCH_STATUS_SUCCESS) {
+            VLOG_ERR("failed to update route");
+            return EINVAL;
+        }
+    } else if (total_nexthops > 1 && ops_routep->n_nexthops > 1) {
+        /* ecmp route to ecmp route */
+        rc = l3_ecmp_members_update(of_routep, ops_routep);
         if (rc == EINVAL) {
             VLOG_ERR("P4: route update failed");
             return rc;
         }
         l3_route_hash_update(vrf_handle, of_routep, ops_routep, false);
-        rc = l3_ecmp_members_add(ops_routep, false);
-        if (rc == EINVAL) {
-            VLOG_ERR("P4: route update failed");
-            return rc;
-        }
-        handle = ops_routep->handle;
         return 0;
     }
 
-    status = switch_api_l3_route_add(
-                             0x0,
-                             vrf_handle,
-                             ip_address,
-                             handle);
-    if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_ERR("failed to add new route");
-        return EINVAL;
-    }
     VLOG_INFO("route updated with handle %lx", handle);
     return 0;
 }
@@ -2282,7 +2420,7 @@ l3_route_entry_delete(
         return EINVAL;
     }
 
-    /* XXX: Delete ecmp and its members */
+    l3_ecmp_delete(ops_routep);
 
     status = switch_api_l3_route_delete(
                              0x0,
@@ -2309,11 +2447,17 @@ l3_nhop_entry_delete(
     struct sim_provider_node *ofproto = sim_provider_node_cast(ofproto_);
     struct ops_route *ops_routep = NULL;
     struct ops_nexthop *ops_nh = NULL;
+    struct ops_nexthop *ops_nh_tmp = NULL;
+    struct ofproto_route_nexthop *of_nh = NULL;
     int new_n_nexthops = 0;
     switch_handle_t handle = 0;
     switch_handle_t vrf_handle = 0;
     switch_status_t status = SWITCH_STATUS_SUCCESS;
+    switch_handle_t rem_nh[MAX_NEXTHOPS_PER_ROUTE];
+    uint16_t rem_nh_count = 0;
+    bool nhop_found = false;
     int rc = 0;
+    int i = 0;
 
     l3_dump_route_entry(ofproto_, of_routep, ip_address);
 
@@ -2325,56 +2469,116 @@ l3_nhop_entry_delete(
         return EINVAL;
     }
 
-    new_n_nexthops = ops_routep->n_nexthops - of_routep->n_nexthops;
+    for (i = 0; i < of_routep->n_nexthops; i++) {
+        of_nh = &of_routep->nexthops[i];
+        ops_nh = l3_nexthop_hash_lookup(ops_routep, of_nh);
+        if (ops_nh) {
+            rem_nh_count++;
+        }
+    }
+
+    if (!rem_nh_count) {
+        VLOG_ERR("no nhops to be deleted");
+        return EINVAL;
+    }
+
+    new_n_nexthops = ops_routep->n_nexthops - rem_nh_count;
     ovs_assert(new_n_nexthops >= 0);
 
+    VLOG_INFO("total nh %d new nh %d rem nh %d",
+               ops_routep->n_nexthops,
+               new_n_nexthops,
+               rem_nh_count);
     /*
      * There can never be non-ecmp to non-ecmp or
      * non-ecmp to ecmp
      */
 
     /* ecmp to non-ecmp */
-    if (new_n_nexthops <=1 && ops_routep->n_nexthops > 1) {
-        l3_route_hash_update(vrf_handle, of_routep, ops_routep, true);
-        rc = l3_ecmp_members_delete(ops_routep, true);
+    if (new_n_nexthops <= 1 && ops_routep->n_nexthops > 1) {
+
+        /*
+         * find the nexthop from ops_routep which is not
+         * in of_routep.
+         */
+        HMAP_FOR_EACH(ops_nh, node, &ops_routep->nexthops) {
+            nhop_found = false;
+            for (i = 0; i < of_routep->n_nexthops; i++) {
+                of_nh = &of_routep->nexthops[i];
+                ops_nh_tmp = l3_nexthop_hash_lookup(ops_routep, of_nh);
+
+                /*
+                 * this should never happen. all of_routep nexthops
+                 * must be in ops_routep hashmap.
+                 */
+                if (!ops_nh_tmp) {
+                    continue;
+                }
+
+                if (ops_nh_tmp->nhop_handle == ops_nh->nhop_handle) {
+                    nhop_found = true;
+                    break;
+                }
+            }
+
+            if (!nhop_found) {
+                handle = ops_nh->nhop_handle;
+                break;
+            }
+        }
+
+        if (handle) {
+            status = switch_api_l3_route_add(
+                                 0x0,
+                                 vrf_handle,
+                                 ip_address,
+                                 handle);
+            if (status != SWITCH_STATUS_SUCCESS) {
+                VLOG_ERR("delete nh: failed to update route");
+            }
+        }
+
+        rc = l3_ecmp_delete(ops_routep);
         if (rc == EINVAL) {
-            VLOG_ERR("P4: nhop entry delete failed");
+            VLOG_ERR("nhop entry delete failed");
             return rc;
         }
-        HMAP_FOR_EACH(ops_nh, node, &ops_routep->nexthops) {
-            handle = ops_nh->nhop_handle;
-        }
+
+        l3_route_hash_update(vrf_handle, of_routep, ops_routep, true);
     /* ecmp to ecmp */
     } else {
-        /*
-         * There should be a better way of doing this.
-         * Add an api in switchapi which replaces old
-         * nhop handles with new ones.
-         */
-        rc = l3_ecmp_members_delete(ops_routep, false);
-        if (rc == EINVAL) {
-            VLOG_ERR("P4: route update failed");
-            return rc;
+        rem_nh_count = 0;
+        for (i = 0; i < of_routep->n_nexthops; i++) {
+            of_nh = &of_routep->nexthops[i];
+            ops_nh = l3_nexthop_hash_lookup(ops_routep, of_nh);
+            if (ops_nh) {
+                if (rem_nh_count < MAX_NEXTHOPS_PER_ROUTE) {
+                    rem_nh[rem_nh_count++] = l3_nexthop_ofroute_get(&of_routep->nexthops[i]);
+                }
+            }
         }
+
+        VLOG_INFO("ecmp handle %lx rem_nh %x", ops_routep->handle, rem_nh_count);
+
+        for (i = 0; i < rem_nh_count; i++) {
+            VLOG_INFO("rem nh %d: %lx", i, rem_nh[i]);
+        }
+
+        if (rem_nh_count) {
+            status = switch_api_ecmp_member_delete(
+                                 0x0,
+                                 ops_routep->handle,
+                                 rem_nh_count,
+                                 rem_nh);
+            if (status != SWITCH_STATUS_SUCCESS) {
+                VLOG_ERR("failed to delete ecmp members %d", status);
+            }
+        }
+
         l3_route_hash_update(vrf_handle, of_routep, ops_routep, true);
-        rc = l3_ecmp_members_add(ops_routep, false);
-        if (rc == EINVAL) {
-            VLOG_ERR("P4: route update failed");
-            return rc;
-        }
-        handle = ops_routep->handle;
     }
 
-    status = switch_api_l3_route_add(
-                             0x0,
-                             vrf_handle,
-                             ip_address,
-                             handle);
-    if (status != SWITCH_STATUS_SUCCESS) {
-        VLOG_ERR("failed to add new route");
-        return EINVAL;
-    }
-    VLOG_INFO("route added with handle %lx", handle);
+    VLOG_INFO("route updated with handle %lx", ops_routep->handle);
     return 0;
 }
 
@@ -2383,9 +2587,11 @@ l3_route_action(const struct ofproto *ofproto,
                 enum ofproto_route_action action,
                 struct ofproto_route *of_routep)
 {
+    struct ofproto_route_nexthop *of_nh = NULL;
     switch_ip_addr_t ip_address;
     bool is_ipv6_addr = false;
     int rc = 0;
+    int i = 0;
 
     switch (of_routep->family) {
         case OFPROTO_ROUTE_IPV4:
@@ -2410,21 +2616,31 @@ l3_route_action(const struct ofproto *ofproto,
             return EINVAL;
     }
 
-    VLOG_DBG("is v6 addr: %d", (int)is_ipv6_addr);
-    VLOG_DBG("ip addr: %s", of_routep->prefix);
+    VLOG_INFO("is v6 addr: %d", (int)is_ipv6_addr);
+    VLOG_INFO("ip addr: %s", of_routep->prefix);
 
     switch (action) {
         case OFPROTO_ROUTE_ADD:
+            VLOG_INFO("received route add");
             rc = l3_route_entry_add(ofproto, of_routep, &ip_address);
             break;
         case OFPROTO_ROUTE_DELETE:
+            VLOG_INFO("received route delete");
             rc = l3_route_entry_delete(ofproto, of_routep, &ip_address);
             break;
         case OFPROTO_ROUTE_DELETE_NH:
+            VLOG_INFO("received delete nhop");
             rc = l3_nhop_entry_delete(ofproto, of_routep, &ip_address);
             break;
         default:
             return EINVAL;
+    }
+
+    if (rc != 0) {
+        for (i = 0; i < of_routep->n_nexthops; i++) {
+            of_nh = &of_routep->nexthops[i];
+            of_nh->rc = rc;
+        }
     }
 
     return rc;

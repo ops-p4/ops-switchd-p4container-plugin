@@ -76,7 +76,6 @@ struct netdev_sim {
     uint32_t port_num;
     switch_handle_t hostif_handle;
     switch_handle_t port_handle;
-    switch_handle_t rmac_handle;
 };
 
 static int netdev_sim_construct(struct netdev *);
@@ -111,7 +110,7 @@ netdev_sim_construct(struct netdev *netdev_)
 
     n = atomic_count_inc(&next_n);
 
-    VLOG_INFO("P4:sim construct for port %s", netdev->up.name);
+    VLOG_INFO("sim construct for port %s", netdev->up.name);
 
     ovs_mutex_init(&netdev->mutex);
     ovs_mutex_lock(&netdev->mutex);
@@ -216,14 +215,6 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
                 struct ether_addr *ether_mac = ether_aton(mac_addr);
                 if (ether_mac != NULL) {
                     memcpy(netdev->hwaddr, ether_mac, ETH_ALEN);
-                    netdev->rmac_handle = switch_api_router_mac_group_create(0x0);
-                    switch_mac_addr_t mac;
-                    switch_status_t status = SWITCH_STATUS_SUCCESS;
-                    memcpy(&mac.mac_addr, netdev->hwaddr, sizeof(switch_mac_addr_t));
-                    status = switch_api_router_mac_add(0x0, netdev->rmac_handle, &mac);
-                    if (status != SWITCH_STATUS_SUCCESS) {
-                        VLOG_ERR("P4: failed to add router mac for port %d", hw_id);
-                    }
                 }
             }
 
@@ -385,7 +376,7 @@ netdev_sim_set_etheraddr(struct netdev *netdev,
     return 0;
 }
 
-static int
+extern int
 netdev_sim_get_etheraddr(const struct netdev *netdev,
                            struct eth_addr *mac)
 {
@@ -533,14 +524,6 @@ int netdev_get_device_port_handle(struct netdev *netdev_,
     struct netdev_sim *netdev = netdev_sim_cast(netdev_);
     *device = 0;
     *port_handle = netdev->port_handle;
-    return 0;
-}
-
-int netdev_get_port_rmac_handle(struct netdev *netdev_,
-                switch_handle_t *rmac_handle)
-{
-    struct netdev_sim *netdev = netdev_sim_cast(netdev_);
-    *rmac_handle = netdev->rmac_handle;
     return 0;
 }
 
