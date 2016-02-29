@@ -876,20 +876,22 @@ found:     ;
             bitmap_set0(bundle->trunks, bundle->vlan);
             bundle->vlan = -1;
         }
-        p4vlan = p4vlan_lookup(ofproto, (uint32_t)s->vlan);
-        if (bitmap_is_set(bundle->trunks, s->vlan)) {
-            /* we need to perform vlan_port_add after setting native vlan
-             * delete it here and re-create after setting native vlan
-             */
-            p4_switch_vlan_port_delete(bundle, s->vlan);
-            bitmap_set0(bundle->trunks, s->vlan);
+        if (s->vlan != -1) {
+            p4vlan = p4vlan_lookup(ofproto, (uint32_t)s->vlan);
+            if (bitmap_is_set(bundle->trunks, s->vlan)) {
+                /* we need to perform vlan_port_add after setting native vlan
+                 * delete it here and re-create after setting native vlan
+                 */
+                p4_switch_vlan_port_delete(bundle, s->vlan);
+                bitmap_set0(bundle->trunks, s->vlan);
+            }
+            if (p4vlan && new_port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
+                switch_api_interface_native_vlan_set(bundle->if_handle, p4vlan->vlan_handle);
+            }
+            p4_switch_vlan_port_create(bundle, s->vlan);
+            /* add native vlan to trunks bitmap */
+            bitmap_set1(bundle->trunks, s->vlan);
         }
-        if (p4vlan && new_port_type == SWITCH_API_INTERFACE_L2_VLAN_TRUNK) {
-            switch_api_interface_native_vlan_set(bundle->if_handle, p4vlan->vlan_handle);
-        }
-        p4_switch_vlan_port_create(bundle, s->vlan);
-        /* add native vlan to trunks bitmap */
-        bitmap_set1(bundle->trunks, s->vlan);
         bundle->vlan = s->vlan;
     }
     if (new_port_type == SWITCH_API_INTERFACE_L2_VLAN_ACCESS) {
