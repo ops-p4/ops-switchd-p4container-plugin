@@ -168,7 +168,9 @@ struct sim_provider_node {
     bool vrf;                   /* Specifies whether specific ofproto instance
                                  * is backing up VRF and not bridge */
     switch_handle_t vrf_handle; /* vrf id handle */
-    switch_handle_t rmac_handle;
+
+    switch_mac_addr_t mac;      /* system router mac address */
+    switch_handle_t rmac_handle; /* router mac handle */
 };
 
 struct sim_provider_port_dump_state {
@@ -188,6 +190,7 @@ struct ops_route {
     int n_nexthops;
     struct hmap nexthops;
     switch_handle_t handle;
+    bool ecmp_enabled;
 };
 
 struct ops_nexthop {
