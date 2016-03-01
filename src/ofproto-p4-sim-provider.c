@@ -893,19 +893,6 @@ found:     ;
 
         return 0;
     }
-    /* Check if we have more than 1 member to create LAG in the hardware
-     * h/w LAG resources are not consumed until we have >1 members (slaves)
-     * Once LAG is created in the h/w it is not removed when mebers drop to 1
-     * XXX this optimization will be done later if required
-     */
-    if (!bundle->is_lag && s->n_slaves > 1) {
-        p4_switch_interface_port_to_lag(bundle);
-    }
-    if (!bundle->is_lag && s->n_slaves == 1) {
-        /* XXX check single port swap case - need to delete and recreate
-         * P4 interface with new port handle
-         */
-    }
 
     /* Need to check the old and new bundle parmeters to handle transitions
      * Old          :   New
@@ -932,7 +919,23 @@ found:     ;
         /* delete old interface and associated vlan_port */
         p4_switch_interface_delete(bundle);
         bundle->port_type = new_port_type;
+        if (!bundle->is_lag && s->n_slaves > 1) {
+            bundle->is_lag = true;
+        }
         p4_switch_interface_create(bundle);
+    }
+    /* Check if we have more than 1 member to create LAG in the hardware
+     * h/w LAG resources are not consumed until we have >1 members (slaves)
+     * Once LAG is created in the h/w it is not removed when mebers drop to 1
+     * XXX this optimization will be done later if required
+     */
+    if (!bundle->is_lag && s->n_slaves > 1) {
+        p4_switch_interface_port_to_lag(bundle);
+    }
+    if (!bundle->is_lag && s->n_slaves == 1) {
+        /* XXX check single port swap case - need to delete and recreate
+         * P4 interface with new port handle
+         */
     }
 
     /* bundle->trunks bitmap bit is set if -
