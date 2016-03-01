@@ -122,7 +122,7 @@ netdev_parse_netlink_msg(struct nlmsghdr *h, struct p4_port_stats *stats)
          attribute = RTA_NEXT(attribute, len)) {
         switch(attribute->rta_type) {
         case IFLA_STATS:
-            VLOG_DBG("Recieved stats from netlink..");
+            //VLOG_DBG("Recieved stats from netlink..");
             s = (struct rtnl_link_stats *) RTA_DATA(attribute);
             stats->rx_packets = s->rx_packets;
             stats->tx_packets = s->tx_packets;
@@ -196,7 +196,7 @@ p4_port_stats_get (const char *if_name, struct p4_port_stats *stats)
     rtnl_msg.msg_iov = &io;
     rtnl_msg.msg_iovlen = 1;
 
-    VLOG_DBG("Requesting stats for %s index %d", if_name, req.iface.ifi_index);
+    //VLOG_DBG("Requesting stats for %s index %d", if_name, req.iface.ifi_index);
     sendmsg(emulns_nl_sockfd, (struct msghdr *) &rtnl_msg, 0);
 
     /* Prepare for reply from the kernel */

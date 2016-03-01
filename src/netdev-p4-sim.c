@@ -76,7 +76,6 @@ struct netdev_sim {
     uint32_t port_num;
     switch_handle_t hostif_handle;
     switch_handle_t port_handle;
-    switch_handle_t rmac_handle;
 };
 
 static int netdev_sim_construct(struct netdev *);
@@ -111,7 +110,7 @@ netdev_sim_construct(struct netdev *netdev_)
 
     n = atomic_count_inc(&next_n);
 
-    VLOG_INFO("P4:sim construct for port %s", netdev->up.name);
+    VLOG_INFO("sim construct for port %s", netdev->up.name);
 
     ovs_mutex_init(&netdev->mutex);
     ovs_mutex_lock(&netdev->mutex);
@@ -216,14 +215,6 @@ netdev_sim_set_hw_intf_info(struct netdev *netdev_, const struct smap *args)
                 struct ether_addr *ether_mac = ether_aton(mac_addr);
                 if (ether_mac != NULL) {
                     memcpy(netdev->hwaddr, ether_mac, ETH_ALEN);
-                    netdev->rmac_handle = switch_api_router_mac_group_create(0x0);
-                    switch_mac_addr_t mac;
-                    switch_status_t status = SWITCH_STATUS_SUCCESS;
-                    memcpy(&mac.mac_addr, netdev->hwaddr, sizeof(switch_mac_addr_t));
-                    status = switch_api_router_mac_add(0x0, netdev->rmac_handle, &mac);
-                    if (status != SWITCH_STATUS_SUCCESS) {
-                        VLOG_ERR("P4: failed to add router mac for port %d", hw_id);
-                    }
                 }
             }
 
@@ -315,6 +306,31 @@ netdev_sim_internal_set_hw_intf_config(struct netdev *netdev_, const struct smap
     return 0;
 }
 
+#if 0
+/* XXX not needed for loopback interface? - confirm */
+static int
+netdev_sim_loopback_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
+{
+    struct netdev_sim *netdev = netdev_sim_cast(netdev_);
+    const bool hw_enable = smap_get_bool(args, INTERFACE_HW_INTF_CONFIG_MAP_ENABLE, false);
+
+    ovs_mutex_lock(&netdev->mutex);
+    strncpy(netdev->linux_intf_name, netdev->up.name, sizeof(netdev->linux_intf_name));
+    VLOG_INFO("netdev_sim_loopback_set_hw_intf_config for %s, enable $d",
+               netdev->linux_intf_name, hw_enable);
+    if(hw_enable) {
+        netdev->flags |= NETDEV_UP;
+        netdev->link_state = 1;
+    } else {
+        netdev->flags &= ~NETDEV_UP;
+        netdev->link_state = 0;
+    }
+    ovs_mutex_unlock(&netdev->mutex);
+    return 0;
+}
+#endif
+
+
 static int
 netdev_sim_set_hw_intf_config(struct netdev *netdev_, const struct smap *args)
 {
@@ -385,7 +401,7 @@ netdev_sim_set_etheraddr(struct netdev *netdev,
     return 0;
 }
 
-static int
+extern int
 netdev_sim_get_etheraddr(const struct netdev *netdev,
                            struct eth_addr *mac)
 {
@@ -536,14 +552,6 @@ int netdev_get_device_port_handle(struct netdev *netdev_,
     return 0;
 }
 
-int netdev_get_port_rmac_handle(struct netdev *netdev_,
-                switch_handle_t *rmac_handle)
-{
-    struct netdev_sim *netdev = netdev_sim_cast(netdev_);
-    *rmac_handle = netdev->rmac_handle;
-    return 0;
-}
-
 static const struct netdev_class sim_class = {
     "system",
     NULL,                       /* init */
@@ -684,9 +692,80 @@ static const struct netdev_class sim_internal_class = {
     NULL,                       /* rxq_drain */
 };
 
+static const struct netdev_class sim_loopback_class = {
+    "loopback",
+    NULL,                       /* init */
+    netdev_sim_run,
+    NULL,                       /* wait */
+
+    netdev_sim_alloc,
+    netdev_sim_construct,
+    netdev_sim_destruct,
+    netdev_sim_dealloc,
+    NULL,                       /* get_config */
+    NULL,                       /* set_config */
+    NULL,
+    NULL,                       /* netdev_sim_loopback_set_hw_intf_config, */
+    NULL,                       /* get_tunnel_config */
+    NULL,                       /* build header */
+    NULL,                       /* push header */
+    NULL,                       /* pop header */
+    NULL,                       /* get_numa_id */
+    NULL,                       /* set_multiq */
+
+    NULL,                       /* send */
+    NULL,                       /* send_wait */
+
+    netdev_sim_set_etheraddr,
+    netdev_sim_get_etheraddr,
+    NULL,                       /* get_mtu */
+    NULL,                       /* set_mtu */
+    NULL,                       /* get_ifindex */
+    netdev_sim_get_carrier,
+    NULL,                       /* get_carrier_resets */
+    NULL,                       /* get_miimon */
+    NULL,
+
+    netdev_sim_get_features,    /* get_features */
+    NULL,                       /* set_advertisements */
+
+    NULL,                       /* set_policing */
+    NULL,                       /* get_qos_types */
+    NULL,                       /* get_qos_capabilities */
+    NULL,                       /* get_qos */
+    NULL,                       /* set_qos */
+    NULL,                       /* get_queue */
+    NULL,                       /* set_queue */
+    NULL,                       /* delete_queue */
+    NULL,                       /* get_queue_stats */
+    NULL,                       /* queue_dump_start */
+    NULL,                       /* queue_dump_next */
+    NULL,                       /* queue_dump_done */
+    NULL,                       /* dump_queue_stats */
+
+    NULL,                       /* get_in4 */
+    NULL,                       /* set_in4 */
+    NULL,                       /* get_in6 */
+    NULL,                       /* add_router */
+    NULL,                       /* get_next_hop */
+    NULL,                       /* get_status */
+    NULL,                       /* arp_lookup */
+
+    netdev_sim_update_flags,
+
+    NULL,                       /* rxq_alloc */
+    NULL,                       /* rxq_construct */
+    NULL,                       /* rxq_destruct */
+    NULL,                       /* rxq_dealloc */
+    NULL,                       /* rxq_recv */
+    NULL,                       /* rxq_wait */
+    NULL,                       /* rxq_drain */
+};
+
 void
 netdev_sim_register(void)
 {
     netdev_register_provider(&sim_class);
     netdev_register_provider(&sim_internal_class);
+    netdev_register_provider(&sim_loopback_class);
 }

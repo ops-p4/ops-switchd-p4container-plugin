@@ -3,6 +3,7 @@ ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS} -I m4
 SUBDIRS = switch/p4src switch/switchapi
 
 prog_CFLAGS = $(AM_CFLAGS)
+DBG_CFLAGS = -g -O0
 
 PFX ?=
 
@@ -27,6 +28,7 @@ libovs_p4_sim_plugin_interface_la_CFLAGS += -I $(srcdir)/switch/p4src/bmv2_p4_pd
 libovs_p4_sim_plugin_interface_la_CFLAGS += -I $(PFX)/$(includedir)/pdfixed
 
 libovs_p4_sim_plugin_interface_la_CFLAGS += -std=gnu99 -D BMV2
+libovs_p4_sim_plugin_interface_la_CFLAGS += $(DBG_CFLAGS)
 
 SWITCHAPI_DIR = $(srcdir)/switch/switchapi
 SWITCHAPI_LIB := $(SWITCHAPI_DIR)/libswitchapi.la

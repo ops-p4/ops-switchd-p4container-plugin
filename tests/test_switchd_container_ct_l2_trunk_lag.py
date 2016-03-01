@@ -1,5 +1,7 @@
-# Copyright (C) 2015 Hewlett Packard Enterprise Development LP
-# All Rights Reserved.
+#!/usr/bin/env python
+
+# (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+# (c) Copyright 2016 Barefoot Networks Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -12,21 +14,12 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-# This script is used as a virtual test setup. By using this script,
-# or modifying it as required, developers can quickly build topologies
-# and test their changes on their VMs.
-# Pre-requisites:
-# 1. Checkout the ops-vsi repo.
-# 2. Run 'make devenv_ct_init'.
-# 3. Export the docker image of the switch from your build directory.
-
-# To run this file, we have to point to the native python inside the sandbox.
-# ex: /usr/bin/sudo <SANDBOX>/build/tmp/sysroots/x86_64-linux/usr/bin/py.test -s dual_switch_test.py
 
 import os
 import time
 from opsvsi.docker import *
 from opsvsi.opsvsitest import *
+import pdb
 
 class CustomTopology( Topo ):
 
@@ -52,10 +45,15 @@ class CustomTopology( Topo ):
 
         #Connect the switches
         for i in irange(2, sws):
-            self.addLink("s%s" % (i-1), "s%s" % i, port1 = 3, port2 = 3)
+            self.addLink("s%s" % (i-1), "s%s" % i, port1 = (i+1), port2 = (i+1))
 
 class twoSwitchTest( OpsVsiTest ):
 
+  # Topology
+  # 4 hosts, 2 switches
+  # 1, 3 hosts connected to s1
+  # 2, 4 hosts connected to s2
+  # s1 is connected s2
   def setupNet(self):
     self.net = Mininet(topo=CustomTopology(hsts=4, sws=2,
                                            hopts=self.getHostOpts(),
@@ -65,6 +63,7 @@ class twoSwitchTest( OpsVsiTest ):
                                            link=OpsVsiLink, controller=None,
                                            build=True)
 
+  # show running config on the switches
   def show_running_config(self):
       info("\n###### Show Running Config #####\n")
       for switch in self.net.switches:
@@ -73,6 +72,7 @@ class twoSwitchTest( OpsVsiTest ):
               runconf = switch.cmdCLI("show running-config")
               info(runconf + "\n")
 
+  # vlan add method
   def vlan_add(self, vlan = 10):
       info("\n###### Configuring Vlan ######\n")
       for switch in self.net.switches:
@@ -82,6 +82,7 @@ class twoSwitchTest( OpsVsiTest ):
               switch.cmdCLI("no shutdown")
               switch.cmdCLI("end")
 
+  # configure access or trunk interfaces
   def config_interface(self, sw, intf, mode, vlan, allowed_vlan="", state=""):
     info("\n###### Configuring Interfaces ######\n")
     switch = self.net.getNodeByName(sw)
@@ -102,8 +103,10 @@ class twoSwitchTest( OpsVsiTest ):
             switch.cmdCLI("no shutdown")
         switch.cmdCLI("end")
 
+  # unconfigure interfaces
   def unconfigure_interface(self, sw, intf, mode, vlan, allowed_vlan=""):
     info("\n##### Unconfigure Interface Config #####\n")
+    #pdb.set_trace()
     switch = self.net.getNodeByName(sw)
     if isinstance(switch, VsiOpenSwitch):
         switch.cmdCLI("configure terminal")
@@ -118,19 +121,25 @@ class twoSwitchTest( OpsVsiTest ):
         switch.cmdCLI("shutdown")
         switch.cmdCLI("end")
 
+  # ping the hosts
   def mininet_ping_hosts(self):
     info("\n###### Ping Hosts #####\n")
-    info("Sleep for 30 seconds for system to be up\n")
-    time.sleep(30)
+    info("Sleep for 20 seconds for system to be up\n")
+    time.sleep(20)
     hosts = self.net.hosts
     result = self.net.ping(hosts,30)
+    info("### Result "+str(result))
+    return int(result)
 
+  # add link between switches
   def add_switch_link(self, sw1, sw2, port1, port2):
     self.net.addLink(sw1, sw2, port1 = port1, port2 = port2)
 
+  # configure lag interface
   def config_lag_interface(self, sw, lag_intf, mode, vlan,\
                            mem_intf_list, allowed_vlan=""):
     info("\n####### Configuring Lag Interface #######\n")
+    # pdb.set_trace()
     switch = self.net.getNodeByName(sw)
     if isinstance(switch, VsiOpenSwitch):
         switch.cmdCLI("configure terminal")
@@ -163,6 +172,7 @@ class Test_dual_switch_test:
     # Create the Mininet topology based on mininet.
     info("##### Create Topology #####\n")
     Test_dual_switch_test.test = twoSwitchTest()
+    #pdb.set_trace()
 
   def test_vlan_add(self):
     info("##### Configure Vlan #####\n")
@@ -192,12 +202,14 @@ class Test_dual_switch_test:
     self.test.mininet_cli()
   '''
 
-  def test_mininet_ping_hosts1(self):
-    info("##### Ping Hosts 1 #####\n")
-    self.test.mininet_ping_hosts()
+  def test_mininet_ping_hosts_trunk(self):
+    info("\n##### Ping Hosts, Switch Trunk #####\n")
+    ret = self.test.mininet_ping_hosts()
+    #print "Return = ", int(ret)
+    assert(ret == 0)
 
   def test_unconfigure_interface(self):
-    info("##### Configure S1 Switch Interfaces - Trunk Mode #####\n")
+    info("\n##### Unconfigure Switch Interfaces - Trunk Mode #####\n")
     self.test.unconfigure_interface(sw="s1",intf=3,mode="trunk",vlan=500,allowed_vlan=500)
     self.test.unconfigure_interface(sw="s2",intf=3,mode="trunk",vlan=500,
                                     allowed_vlan=500)
@@ -222,9 +234,13 @@ class Test_dual_switch_test:
   def test_show_run_2(self):
     self.test.show_running_config()
 
-  def test_mininet_ping_hosts2(self):
-    info("##### Ping Hosts 2 #####\n")
-    self.test.mininet_ping_hosts()
+  def test_mininet_ping_hosts_lag(self):
+    info("\n##### Ping Hosts, Switch Lag Group  #####\n")
+    ret = self.test.mininet_ping_hosts()
+    #print "\nReturn = ", int(ret)
+    assert(ret == 0)
+    #self.test.mininet_cli()
+
 
   def teardown_class(cls):
     # Stop the Docker containers, and
